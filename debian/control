@@ -1,0 +1,14 @@
+Source: st2-sso-backend
+Section: Python
+Priority: optional
+Maintainer: Extreme Networks <support@extremenetworks.com>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.4
+Homepage: https://www.extremenetworks.com/product/workflow-composer/
+
+Package: st2-sso-backend
+Architecture: amd64
+Pre-Depends: st2
+Depends: ${misc:Depends}, crudini, st2
+Description: SSO backend for EWC
+  SSO Backend for Extreme Workflow Composer. Support single sign for web UI.

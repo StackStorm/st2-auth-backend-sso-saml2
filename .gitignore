@@ -40,6 +40,10 @@ htmlcov/
 .tox/
 .coverage
 .coverage.*
+.coverage.integration.*
+.coverage.integration
+.coverage.unit.*
+.coverage.unit
 .cache
 nosetests.xml
 coverage.xml
@@ -89,6 +93,12 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+virtualenv
+virtualenv-py3
+virtualenv-osx
+virtualenv-st2client
+virtualenv-st2client-osx
+.venv-st2devbox
 
 # Spyder project settings
 .spyderproject
@@ -102,3 +112,15 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Mr Developer
+.idea
+.DS_Store
+._*
+.vscode
+*.sublime-project
+*.sublime-workspace
+
+# Editor Saves
+*~
+\#*\#
