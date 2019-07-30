@@ -7,7 +7,7 @@ ROOT_DIR ?= $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 PKG_NAME := st2-sso-backend
 PKG_RELEASE ?= 1
 WHEELSDIR ?= opt/stackstorm/share/wheels
-VIRTUALENV_DIR ?= $(ROOT_DIR)/virtualenv
+VIRTUALENV_DIR ?= virtualenv
 ST2_REPO_PATH ?= /tmp/st2
 ST2_REPO_URL ?= git@github.com:StackStorm/st2.git
 ST2_REPO_BRANCH ?= master
@@ -140,28 +140,28 @@ compilepy3:
 	@echo
 	@echo "==================== flake8 ===================="
 	@echo
-	$(VIRTUALENV_DIR)/bin/flake8 --config=lint-configs/python/.flake8-proprietary st2auth_sso_backends/ tests/
+	. $(VIRTUALENV_DIR)/bin/activate; flake8 --config=lint-configs/python/.flake8-proprietary st2auth_sso_backends/ tests/
 
 .PHONY: .pylint
 .pylint:
 	@echo
 	@echo "==================== pylint ===================="
 	@echo
-	$(VIRTUALENV_DIR)/bin/pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc --load-plugins=pylint_plugins.api_models --load-plugins=pylint_plugins.db_models st2auth_sso_backends/
+	. $(VIRTUALENV_DIR)/bin/activate; pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc --load-plugins=pylint_plugins.api_models --load-plugins=pylint_plugins.db_models st2auth_sso_backends/
 
 .PHONY: .unit-tests
 .unit-tests:
 	@echo
 	@echo "==================== unit-tests ===================="
 	@echo
-	$(VIRTUALENV_DIR)/bin/nosetests $(NOSE_OPTS) -s -v tests/unit/
+	. $(VIRTUALENV_DIR)/bin/activate; nosetests $(NOSE_OPTS) -s -v tests/unit/
 
 .PHONY: .integration-tests
 .integration-tests:
 	@echo
 	@echo "==================== integration-tests ===================="
 	@echo
-	$(VIRTUALENV_DIR)/bin/nosetests $(NOSE_OPTS) -s -v tests/integration/
+	. $(VIRTUALENV_DIR)/bin/activate; nosetests $(NOSE_OPTS) -s -v tests/integration/
 
 .PHONY: .unit-tests-py3
 .unit-tests-py3:
