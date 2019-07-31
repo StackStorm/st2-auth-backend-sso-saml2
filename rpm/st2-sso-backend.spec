@@ -17,7 +17,7 @@ Summary:        SSO Backend for EWC
 URL:            https://www.extremenetworks.com/product/workflow-composer/
 Source0:        st2-enterprise-sso-backend
 
-Requires: crudini st2
+Requires: st2
 
 %define _builddir %(pwd)
 %define _rpmdir %(pwd)/build
