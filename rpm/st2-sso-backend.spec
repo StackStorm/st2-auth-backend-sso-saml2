@@ -22,15 +22,6 @@ Requires: st2
 %define _builddir %(pwd)
 %define _rpmdir %(pwd)/build
 
-# Cat debian/package.links, set buildroot prefix and create symlinks.
-%define debian_links cat debian/%{name}.links | grep -v '^\\s*#' | \
-            sed -r -e 's~\\b~/~' -e 's~\\s+\\b~ %{buildroot}/~' | \
-          while read link_rule; do \
-            linkpath=$(echo "$link_rule" | cut -f2 -d' ') && [ -d $(dirname "$linkpath") ] || \
-              mkdir -p $(dirname "$linkpath") && ln -s $link_rule \
-          done \
-%{nil}
-
 %description
   SSO Backend for Extreme Workflow Composer
 
@@ -42,20 +33,18 @@ Requires: st2
   make
 
 %install
-  %debian_links
   %make_install
 
 %clean
   rm -rf %{buildroot}
 
 %post
-  %include rpm/postinst_script.spec
+  %{pip} install --find-links %{st2wheels} --no-index --quiet --upgrade st2-enterprise-sso-backend
 
 %postun
-  %include rpm/postun_script.spec
-
-%posttrans
-  %include rpm/posttrans_script.spec
+  if [ $1 -eq 0 ]; then
+    %{pip} uninstall -y --quiet st2-enterprise-sso-backend 1>/dev/null || :
+  fi
 
 %files
   %doc rpm/LICENSE
