@@ -59,5 +59,4 @@ Requires: crudini st2
 
 %files
   %doc rpm/LICENSE
-  %{_bindir}/*
   %{st2wheels}/*
