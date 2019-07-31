@@ -24,7 +24,11 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+debian/debhelper-build-stamp
+debian/files
 debian/st2-sso-backend/
+debian/st2-sso-backend.debhelper.log
+debian/st2-sso-backend.substvars
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
