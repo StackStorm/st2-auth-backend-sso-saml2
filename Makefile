@@ -276,4 +276,4 @@ deb:
 	dpkg-buildpackage -b -uc -us -j`_cpunum=$$(nproc); echo "${_cpunum:-1}"`
 
 rpm:
-	rpmbuild -bb rpm/st2-sso-backend.spec
+	cd $(ROOT_DIR); rpmbuild -bb rpm/st2-sso-backend.spec
