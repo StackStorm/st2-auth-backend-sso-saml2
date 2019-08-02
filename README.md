@@ -1,6 +1,6 @@
 # StackStorm SSO Backend for StackStorm Enterprise Edition
 
-[![Circle CI Build Status](https://circleci.com/gh/extremenetworks/st2-enterprise-sso-backend.svg?style=shield&circle-token=eaf1bdcfc552072706ef0a6e68049f285dd33a03)](https://circleci.com/gh/extremenetworks/st2-enterprise-sso-backend)
+[![CircleCI Build Status](https://circleci.com/gh/extremenetworks/st2-enterprise-sso-backend.svg?style=shield&circle-token=a23ecf2d5d16a2598420e8b21f2bb7ed83868216)](https://circleci.com/gh/extremenetworks/st2-enterprise-sso-backend)
 
 ## Copyright
 
