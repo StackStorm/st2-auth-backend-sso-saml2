@@ -1,0 +1,4 @@
+include bin/*
+include dist_utils.py
+include requirements.txt
+include LICENSE
