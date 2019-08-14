@@ -49,9 +49,10 @@ setup(
     install_requires=install_reqs,
     dependency_links=dep_links,
     test_suite='tests',
+    zip_safe=False,
     entry_points={
-        'st2common.sso.backends': [
-        ],
-    },
-    zip_safe=False
+        'st2auth.sso.backends': [
+            'saml2 = st2auth_sso_backends.saml:SAML2SingleSignOnBackend'
+        ]
+    }
 )

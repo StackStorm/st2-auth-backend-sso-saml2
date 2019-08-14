@@ -10,7 +10,7 @@ WHEELSDIR ?= opt/stackstorm/share/wheels
 VIRTUALENV_DIR ?= virtualenv
 ST2_REPO_PATH ?= /tmp/st2
 ST2_REPO_URL ?= git@github.com:StackStorm/st2.git
-ST2_REPO_BRANCH ?= master
+ST2_REPO_BRANCH ?= st2auth-sso
 
 # Packaging Options
 PKGDISTDIR = dist
@@ -213,6 +213,7 @@ requirements: virtualenv .clone_st2_repo .install-runners-and-deps
 	@echo
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/test-requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements.txt
 
 .PHONY: requirements-ci
 requirements-ci:
@@ -221,6 +222,7 @@ requirements-ci:
 	@echo
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/test-requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements.txt
 
 .PHONY: virtualenv
 virtualenv: $(VIRTUALENV_DIR)/bin/activate
