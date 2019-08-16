@@ -31,7 +31,7 @@ MOCK_ACS_URL = '%s/auth/sso/callback' % MOCK_ENTITY_ID
 MOCK_IDP_URL = 'https://some.idp.com'
 MOCK_METADATA_URL = '%s/saml/metadata' % MOCK_IDP_URL
 MOCK_REDIRECT_URL = '%s/app/st2/sso/saml' % MOCK_IDP_URL
-MOCK_X506_CERT = 'ABCDEFG1234567890'
+MOCK_X509_CERT = 'ABCDEFG1234567890'
 MOCK_REFERER = MOCK_ENTITY_ID
 
 MOCK_SAML_METADATA_TEXT = (
@@ -64,7 +64,7 @@ class MockSamlMetadata(object):
     def __init__(self, text='foobar'):
         self.text = MOCK_SAML_METADATA_TEXT % (
             MOCK_ENTITY_ID,
-            MOCK_X506_CERT,
+            MOCK_X509_CERT,
             MOCK_REDIRECT_URL,
             MOCK_REDIRECT_URL
         )
