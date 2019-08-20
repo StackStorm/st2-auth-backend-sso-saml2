@@ -31,7 +31,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
     SAML2 SSO authentication backend.
     """
 
-    def __init__(self, entity_id, metadata_url):
+    def __init__(self, entity_id, metadata_url, debug=False):
         self.entity_id = entity_id
         self.relay_state_id = uuid.uuid4().hex
         self.https_acs_url = '%s/auth/sso/callback' % self.entity_id
@@ -65,6 +65,9 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                 }
             }
         }
+
+        if debug:
+            self.saml_client_settings['debug'] = 1
 
     def _get_relay_state_id(self):
         return self.relay_state_id
