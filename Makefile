@@ -111,6 +111,9 @@ all: requirements lint
 .PHONY: all-ci
 all-ci: compile .flake8 .pylint
 
+.PHONY: tests
+tests: lint .unit-tests .integration-tests
+
 .PHONY: lint
 lint: requirements flake8 pylint
 
