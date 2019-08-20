@@ -38,7 +38,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         self.saml_metadata_url = kwargs['metadata_url']
         self.saml_metadata = requests.get(self.saml_metadata_url)
 
-        LOG.info(self.saml_metadata.text)
+        LOG.debug('METADATA GET FROM "%s": %s' % (self.saml_metadata_url, self.saml_metadata.text))
 
         self.saml_client_settings = {
             'entityid': self.entity_id,
