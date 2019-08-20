@@ -108,6 +108,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             if getattr(response, 'SAMLResponse', None) is None:
                 self._handle_verification_error('The SAMLResponse attribute is null.')
 
+            # The SAMLResponse is an array and it cannot be empty.
             if len(getattr(response, 'SAMLResponse')) <= 0:
                 self._handle_verification_error('The SAMLResponse attribute is empty.')
 
@@ -120,6 +121,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             if has_relay_state and getattr(response, 'RelayState', None) is None:
                 self._handle_verification_error('The RelayState attribute is null.')
 
+            # The RelayState is an array and it cannot be empty.
             if has_relay_state and len(getattr(response, 'RelayState')) <= 0:
                 self._handle_verification_error('The RelayState attribute is empty.')
 
