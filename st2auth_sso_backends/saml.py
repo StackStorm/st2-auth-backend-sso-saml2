@@ -31,11 +31,11 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
     SAML2 SSO authentication backend.
     """
 
-    def __init__(self, *args, **kwargs):
-        self.entity_id = kwargs['entity_id']
+    def __init__(self, entity_id, metadata_url):
+        self.entity_id = entity_id
         self.relay_state_id = uuid.uuid4().hex
         self.https_acs_url = '%s/auth/sso/callback' % self.entity_id
-        self.saml_metadata_url = kwargs['metadata_url']
+        self.saml_metadata_url = metadata_url
         self.saml_metadata = requests.get(self.saml_metadata_url)
 
         LOG.debug('METADATA GET FROM "%s": %s' % (self.saml_metadata_url, self.saml_metadata.text))
