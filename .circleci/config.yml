@@ -25,6 +25,7 @@ jobs:
       - run:
           name: Download and install dependencies
           command: |
+            sudo apt-get -y install xmlsec1
             make requirements
       - run:
           name: Run lint and tests (Python 2.7)
@@ -53,6 +54,7 @@ jobs:
       - run:
           name: Download and install dependencies
           command: |
+            sudo apt-get -y install xmlsec1
             make requirements
       - run:
           name: Run lint and tests (Python 3.6)
