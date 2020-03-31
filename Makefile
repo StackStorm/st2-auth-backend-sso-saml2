@@ -3,7 +3,7 @@
 # Proprietary and confidential
 
 ROOT_DIR ?= $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-
+CURRENT_DIR ?= $(shell pwd)
 PKG_NAME := st2-sso-backend
 PKG_RELEASE ?= 1
 WHEELSDIR ?= opt/stackstorm/share/wheels
@@ -21,14 +21,19 @@ EGGINFODIR = *.egg-info
 ifneq (,$(wildcard /etc/debian_version))
 	DEBIAN := 1
 	DEB_DISTRO := $(shell lsb_release -cs)
+	REDHAT_DISTRO := 0
 else
 	REDHAT := 1
+	REDHAT_DISTRO := $(shell rpm --eval '%{rhel}')
 	DEB_DISTRO := unstable
 endif
 
 ifeq ($(DEB_DISTRO),bionic)
 	PYTHON_BINARY := /usr/bin/python3
 	PIP_BINARY := /usr/local/bin/pip3
+else ifeq ($(shell test $(REDHAT_DISTRO) -ge 8; echo $$?), 0)
+    PYTHON_BINARY := $(shell which python3)
+    PIP_BINARY := $(shell which pip3)
 else
 	PYTHON_BINARY := python
 	PIP_BINARY := pip
@@ -51,7 +56,7 @@ space_char +=
 COMPONENTS = $(wildcard $(ST2_REPO_PATH)/st2*)
 COMPONENTS_RUNNERS := $(wildcard $(ST2_REPO_PATH)/contrib/runners/*)
 COMPONENTS_WITH_RUNNERS := $(COMPONENTS) $(COMPONENTS_RUNNERS)
-COMPONENT_PYTHONPATH = $(subst $(space_char),:,$(realpath $(COMPONENTS_WITH_RUNNERS))):$(ST2_REPO_PATH)
+COMPONENT_PYTHONPATH = $(subst $(space_char),:,$(realpath $(COMPONENTS_WITH_RUNNERS))):$(ST2_REPO_PATH):$(CURRENT_DIR)
 COMPONENTS_TEST := $(foreach component,$(filter-out $(COMPONENT_SPECIFIC_TESTS),$(COMPONENTS_WITH_RUNNERS)),$(component))
 COMPONENTS_TEST_COMMA := $(subst $(slash),$(dot),$(subst $(space_char),$(comma),$(COMPONENTS_TEST)))
 COMPONENTS_TEST_MODULES := $(subst $(slash),$(dot),$(COMPONENTS_TEST_DIRS))
@@ -80,8 +85,9 @@ endif
 .PHONY: play
 play:
 	@echo "DEBIAN=$(DEBIAN)"
-	@echo "REDHAT=$(REDHAT)"
 	@echo "DEB_DISTRO=$(DEB_DISTRO)"
+	@echo "REDHAT=$(REDHAT)"
+	@echo "REDHAT_DISTRO=$(REDHAT_DISTRO)"
 	@echo "PYTHON_BINARY=$(PYTHON_BINARY)"
 	@echo "PIP_BINARY=$(PIP_BINARY)"
 	@echo "PKG_VERSION=$(PKG_VERSION)"
@@ -199,32 +205,47 @@ compilepy3:
 	@echo ""
 	@echo "================== register metrics drivers ======================"
 	@echo ""
-
 	# Install st2common to register metrics drivers
 	(. $(VIRTUALENV_DIR)/bin/activate; cd $(ST2_REPO_PATH)/st2common; python setup.py develop --no-deps)
-
 	@echo ""
 	@echo "================== register sso backends ======================"
 	@echo ""
 	(. $(VIRTUALENV_DIR)/bin/activate; python setup.py develop --no-deps)
 
-
 .PHONY: requirements
-requirements: virtualenv .clone_st2_repo .install-runners-and-deps
+requirements: .clone_st2_repo virtualenv
 	@echo
 	@echo "==================== requirements ===================="
 	@echo
-	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/requirements.txt
-	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/test-requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/test-requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements.txt
+	@echo ""
+	@echo "================== install runners ===================="
+	@echo ""
+	@for component in $(COMPONENTS_RUNNERS); do \
+        echo "==========================================================="; \
+        echo "Installing runner:" $$component; \
+        echo "==========================================================="; \
+        (. $(VIRTUALENV_DIR)/bin/activate; cd $$component; python setup.py develop --no-deps); \
+    done
+	@echo ""
+	@echo "================== register metrics drivers ======================"
+	@echo ""
+	# Install st2common to register metrics drivers
+	(. $(VIRTUALENV_DIR)/bin/activate; cd $(ST2_REPO_PATH)/st2common; python setup.py develop --no-deps)
+	@echo ""
+	@echo "================== register sso backends ======================"
+	@echo ""
+	(. $(VIRTUALENV_DIR)/bin/activate; python setup.py develop --no-deps)
 
 .PHONY: requirements-ci
 requirements-ci:
 	@echo
 	@echo "==================== requirements-ci ===================="
 	@echo
-	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/requirements.txt
-	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r /tmp/st2/test-requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/test-requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements.txt
 
 .PHONY: virtualenv
@@ -233,7 +254,7 @@ $(VIRTUALENV_DIR)/bin/activate:
 	@echo
 	@echo "==================== virtualenv ===================="
 	@echo
-	test -d $(VIRTUALENV_DIR) || virtualenv --no-site-packages $(VIRTUALENV_DIR)
+	test -d $(VIRTUALENV_DIR) || virtualenv $(VIRTUALENV_DIR)
 
 	# Setup PYTHONPATH in bash activate script...
 	# Delete existing entries (if any)
