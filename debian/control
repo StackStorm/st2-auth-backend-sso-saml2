@@ -1,14 +1,13 @@
 Source: st2-sso-backend
 Section: Python
 Priority: optional
-Maintainer: Extreme Networks <support@extremenetworks.com>
+Maintainer: StackStorm Engineering <opsadmin@stackstorm.com>
 Build-Depends: debhelper (>= 8.0.0)
 Standards-Version: 3.9.4
-Homepage: https://www.extremenetworks.com/product/workflow-composer/
+Homepage: http://stackstorm.com/
 
 Package: st2-sso-backend
 Architecture: amd64
 Pre-Depends: st2
 Depends: ${misc:Depends}, st2, xmlsec1
-Description: SSO backend for EWC
-  SSO Backend for Extreme Workflow Composer. Support single sign for web UI.
+Description: SSO backend for StackStorm
