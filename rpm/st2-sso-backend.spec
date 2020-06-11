@@ -18,9 +18,9 @@ Version:        %{version}
 Epoch: %{epoch}
 %endif
 Release:        %{release}
-License:        Extreme Workflow Composer EULA
-Summary:        SSO Backend for EWC
-URL:            https://www.extremenetworks.com/product/workflow-composer/
+License:        Apache 2.0
+Summary:        SSO Backend for StackStorm
+URL:            https://stackstorm.com
 Source0:        st2-enterprise-sso-backend
 
 Requires: st2, xmlsec1
@@ -29,7 +29,7 @@ Requires: st2, xmlsec1
 %define _rpmdir %(pwd)/build
 
 %description
-  SSO Backend for Extreme Workflow Composer
+  SSO Backend for StackStorm
 
 %prep
   rm -rf %{buildroot}
