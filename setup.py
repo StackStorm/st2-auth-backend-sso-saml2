@@ -32,14 +32,12 @@ install_reqs, dep_links = fetch_requirements(REQUIREMENTS_FILE)
 setup(
     name='st2-enterprise-sso-backend',
     version=version,
-    description='Enterprise SSO backend for StackStorm.',
-    author='Extreme Networks, Inc.',
+    description='SSO backend for StackStorm.',
+    author='StackStorm, Inc.',
     author_email='info@stackstorm.com',
-    url='https://github.com/extremenetworks/st2-enterprise-sso-backend',
-    license='Proprietary License',
-    download_url=(
-        'https://github.com/extremenetworks/st2-enterprise-sso-backend/tarball/master'
-    ),
+    url='https://stackstorm.com/',
+    license='Apache License (2.0)',
+    download_url='https://stackstorm.com/',
     classifiers=[
         'License :: Other/Proprietary License'
         'Programming Language :: Python',
