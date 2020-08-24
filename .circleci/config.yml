@@ -174,7 +174,7 @@ jobs:
             done
 workflows:
   version: 2
-  # Workflow which runs on each posh
+  # Workflow which runs on each push
   build_test_deploy_on_push:
     jobs:
       - build_and_test_python27
