@@ -72,7 +72,7 @@ jobs:
       - image: circleci/python:2.7
     environment:
       DISTROS: xenial bionic el7 el8
-      DOCKER_DISTROS: bionic centos7 centos8
+      DOCKER_DISTROS: xenial bionic centos7 centos8
       DOCKER_RUN: |-
         docker run -w /code/st2-sso-backend --volumes-from st2-sso-backend-vol
             -e PKG_VERSION=$PKG_VERSION
@@ -82,6 +82,7 @@ jobs:
       - run:
           name: Install dependencies
           command: |
+            sudo apt-get update
             sudo apt-get install -y jq rpm
       - setup_remote_docker
       - run:
