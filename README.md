@@ -1,4 +1,4 @@
-# StackStorm SSO Backend for StackStorm Enterprise Edition
+# Single Sign On Backend for StackStorm
 
 ## Copyright, License, and Contributors Agreement
 
