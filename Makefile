@@ -17,7 +17,6 @@ CURRENT_DIR ?= $(shell pwd)
 PKG_NAME := st2-sso-backend
 PKG_RELEASE ?= 1
 WHEELSDIR ?= opt/stackstorm/share/wheels
-PYTHON ?= $(shell which python)
 VIRTUALENV_DIR ?= virtualenv
 ST2_REPO_PATH ?= /tmp/st2
 ST2_REPO_URL ?= git@github.com:StackStorm/st2.git
@@ -281,7 +280,7 @@ $(VIRTUALENV_DIR)/bin/activate:
 	@echo
 	@echo "==================== virtualenv ===================="
 	@echo
-	test -d $(VIRTUALENV_DIR) || virtualenv -p $(PYTHON) $(VIRTUALENV_DIR)
+	test -d $(VIRTUALENV_DIR) || virtualenv $(VIRTUALENV_DIR)
 
 	# Setup PYTHONPATH in bash activate script...
 	# Delete existing entries (if any)
