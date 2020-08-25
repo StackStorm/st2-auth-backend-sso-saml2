@@ -1,16 +1,10 @@
-st2-sso-backend (3.2dev-1) xenial; urgency=medium
+st2-auth-backend-sso-saml2 (3.2dev-1) xenial; urgency=medium
 
   * automated build, version: 3.2dev
 
  -- StackStorm Engineering <opsadmin@stackstorm.com>  Tue, 30 Jul 2019 18:48:40 +0000
 
-st2-sso-backend (3.2dev-1) xenial; urgency=medium
-
-  * automated build, version: 3.2dev
-
- -- StackStorm Engineering <opsadmin@stackstorm.com>  Tue, 30 Jul 2019 18:47:24 +0000
-
-st2-sso-backend (1.1.0-1) stable; urgency=low
+st2-auth-backend-sso-saml2 (1.1.0-1) stable; urgency=low
 
   * Initial Release.
 

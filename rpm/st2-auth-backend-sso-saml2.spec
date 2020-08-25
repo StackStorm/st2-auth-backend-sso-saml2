@@ -12,16 +12,16 @@
 %define st2wheels %{st2dir}/share/wheels
 %define pip %{st2dir}/st2/bin/pip
 
-Name:           st2-sso-backend
+Name:           st2-auth-backend-sso-saml2
 Version:        %{version}
 %if 0%{?epoch}
 Epoch: %{epoch}
 %endif
 Release:        %{release}
 License:        Apache 2.0
-Summary:        SSO Backend for StackStorm
+Summary:        SAML2 SSO Backend for StackStorm
 URL:            https://stackstorm.com
-Source0:        st2-enterprise-sso-backend
+Source0:        st2-auth-backend-sso-saml2
 
 Requires: st2, xmlsec1
 
@@ -29,7 +29,7 @@ Requires: st2, xmlsec1
 %define _rpmdir %(pwd)/build
 
 %description
-  SSO Backend for StackStorm
+  SAML2 SSO Backend for StackStorm
 
 %prep
   rm -rf %{buildroot}
@@ -45,11 +45,11 @@ Requires: st2, xmlsec1
   rm -rf %{buildroot}
 
 %post
-  %{pip} install --find-links %{st2wheels} --no-index --quiet --upgrade st2-enterprise-sso-backend
+  %{pip} install --find-links %{st2wheels} --no-index --quiet --upgrade st2-auth-backend-sso-saml2
 
 %postun
   if [ $1 -eq 0 ]; then
-    %{pip} uninstall -y --quiet st2-enterprise-sso-backend 1>/dev/null || :
+    %{pip} uninstall -y --quiet st2-auth-backend-sso-saml2 1>/dev/null || :
   fi
 
 %files

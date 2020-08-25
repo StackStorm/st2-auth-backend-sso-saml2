@@ -1,5 +1,5 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: st2-sso-backend
+Upstream-Name: st2-auth-backend-sso-saml2
 Source: https://www.stackstorm.com
 
 Files: *

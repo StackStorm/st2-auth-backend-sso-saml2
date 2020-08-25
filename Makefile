@@ -14,7 +14,7 @@
 
 ROOT_DIR ?= $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CURRENT_DIR ?= $(shell pwd)
-PKG_NAME := st2-sso-backend
+PKG_NAME := st2-auth-backend-sso-saml2
 PKG_RELEASE ?= 1
 WHEELSDIR ?= opt/stackstorm/share/wheels
 VIRTUALENV_DIR ?= virtualenv
@@ -175,14 +175,14 @@ compilepy3:
 	@echo
 	@echo "==================== flake8 ===================="
 	@echo
-	. $(VIRTUALENV_DIR)/bin/activate; flake8 --config=lint-configs/python/.flake8 st2auth_sso_backends/ tests/
+	. $(VIRTUALENV_DIR)/bin/activate; flake8 --config=lint-configs/python/.flake8 st2auth_sso_saml2/ tests/
 
 .PHONY: .pylint
 .pylint:
 	@echo
 	@echo "==================== pylint ===================="
 	@echo
-	. $(VIRTUALENV_DIR)/bin/activate; pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc --load-plugins=pylint_plugins.api_models --load-plugins=pylint_plugins.db_models st2auth_sso_backends/
+	. $(VIRTUALENV_DIR)/bin/activate; pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc --load-plugins=pylint_plugins.api_models --load-plugins=pylint_plugins.db_models st2auth_sso_saml2/
 
 .PHONY: .unit-tests
 .unit-tests:
@@ -328,4 +328,4 @@ deb:
 	dpkg-buildpackage -b -uc -us -j`_cpunum=$$(nproc); echo "${_cpunum:-1}"`
 
 rpm:
-	rpmbuild -bb rpm/st2-sso-backend.spec
+	rpmbuild -bb rpm/st2-auth-backend-sso-saml2.spec
