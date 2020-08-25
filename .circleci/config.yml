@@ -4,7 +4,7 @@
 # PACKAGECLOUD_ORGANIZATION (default: stackstorm)
 # PACKAGECLOUD_TOKEN
 defaults: &defaults
-  working_directory: ~/st2-sso-backend
+  working_directory: ~/st2-auth-backend-sso-saml2
 
 version: 2
 jobs:
@@ -71,10 +71,10 @@ jobs:
     docker:
       - image: circleci/python:2.7
     environment:
-      DISTROS: trusty xenial bionic el7 el8
-      DOCKER_DISTROS: trusty bionic centos7 centos8
+      DISTROS: xenial bionic el7 el8
+      DOCKER_DISTROS: xenial bionic centos7 centos8
       DOCKER_RUN: |-
-        docker run -w /code/st2-sso-backend --volumes-from st2-sso-backend-vol
+        docker run -w /code/st2-auth-backend-sso-saml2 --volumes-from st2-auth-backend-sso-saml2-vol
             -e PKG_VERSION=$PKG_VERSION
             -e PKG_RELEASE=$PKG_RELEASE
     steps:
@@ -82,6 +82,7 @@ jobs:
       - run:
           name: Install dependencies
           command: |
+            sudo apt-get update
             sudo apt-get install -y jq rpm
       - setup_remote_docker
       - run:
@@ -101,48 +102,47 @@ jobs:
             wget -qO - https://github.com/StackStorm/st2-packages/raw/master/.circle/packagecloud.sh > .circle/packagecloud.sh
             chmod 755 .circle/packagecloud.sh
             PKG_VERSION=$(python setup.py --version 2> /dev/null | sed 's/\.dev[0-9]$/dev/')
-            PKG_RELEASE=$(.circle/packagecloud.sh next-revision trusty ${PKG_VERSION} st2-sso-backend)
+            PKG_RELEASE=$(.circle/packagecloud.sh next-revision xenial ${PKG_VERSION} st2-auth-backend-sso-saml2)
             echo "export PKG_VERSION=${PKG_VERSION}" >> ~/.circlerc
             echo "export PKG_RELEASE=${PKG_RELEASE}" >> ~/.circlerc
             # Create directories
-            mkdir -p ~/st2-sso-backend/build/
-            cd  ~/st2-sso-backend/build/ && mkdir ${DISTROS}
+            mkdir -p ~/st2-auth-backend-sso-saml2/build/
+            cd  ~/st2-auth-backend-sso-saml2/build/ && mkdir ${DISTROS}
       - run:
           # Workaround for CircleCI docker-compose limitation where volumes don't work
           # See detailed explanation: https://circleci.com/docs/2.0/building-docker-images/#mounting-folders
           name: Copy packages files to build containers
           command: |
             # creating dummy container which will hold a volume with data files
-            docker create -v /code --name st2-sso-backend-vol alpine:3.4 /bin/true
+            docker create -v /code --name st2-auth-backend-sso-saml2-vol alpine:3.4 /bin/true
             # copy st2-packages data files into this volume
-            docker cp ~/st2-sso-backend st2-sso-backend-vol:/code
+            docker cp ~/st2-auth-backend-sso-saml2 st2-auth-backend-sso-saml2-vol:/code
       - run:
           name: Build packages for supported distros on native OS inside stackstorm/buildpack container
           command: |
             source ~/.circlerc
-            # 1. Build Trusty and Xenial packages
+            # 1. Build Xenial packages
             # NOTE: We can re-use the same packages because both distros use same Python 2.7 version
-            eval ${DOCKER_RUN} stackstorm/buildpack:trusty make play deb
-            docker cp st2-sso-backend-vol:/code/st2-sso-backend_${PKG_VERSION}-${PKG_RELEASE}_amd64.deb ~/st2-sso-backend/build/trusty
-            docker cp st2-sso-backend-vol:/code/st2-sso-backend_${PKG_VERSION}-${PKG_RELEASE}_amd64.changes ~/st2-sso-backend/build/trusty
-            cp ~/st2-sso-backend/build/trusty/* ~/st2-sso-backend/build/xenial
+            eval ${DOCKER_RUN} stackstorm/buildpack:xenial make play deb
+            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.deb ~/st2-auth-backend-sso-saml2/build/xenial
+            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.changes ~/st2-auth-backend-sso-saml2/build/xenial
             # 2. Build Bionic packages
             eval ${DOCKER_RUN} stackstorm/buildpack:bionic make play deb
-            docker cp st2-sso-backend-vol:/code/st2-sso-backend_${PKG_VERSION}-${PKG_RELEASE}_amd64.deb ~/st2-sso-backend/build/bionic
-            docker cp st2-sso-backend-vol:/code/st2-sso-backend_${PKG_VERSION}-${PKG_RELEASE}_amd64.changes ~/st2-sso-backend/build/bionic
+            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.deb ~/st2-auth-backend-sso-saml2/build/bionic
+            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.changes ~/st2-auth-backend-sso-saml2/build/bionic
             # 3. Build RHEL 7 packages
             eval ${DOCKER_RUN} stackstorm/buildpack:centos7 make play rpm
-            docker cp st2-sso-backend-vol:/code/st2-sso-backend/build/x86_64/st2-sso-backend-${PKG_VERSION}-${PKG_RELEASE}.x86_64.rpm ~/st2-sso-backend/build/el7
+            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2/build/x86_64/st2-auth-backend-sso-saml2-${PKG_VERSION}-${PKG_RELEASE}.x86_64.rpm ~/st2-auth-backend-sso-saml2/build/el7
             # 4. Build RHEL 8 packages
             eval ${DOCKER_RUN} stackstorm/buildpack:centos8 make play rpm
-            docker cp st2-sso-backend-vol:/code/st2-sso-backend/build/x86_64/st2-sso-backend-${PKG_VERSION}-${PKG_RELEASE}.x86_64.rpm ~/st2-sso-backend/build/el8
+            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2/build/x86_64/st2-auth-backend-sso-saml2-${PKG_VERSION}-${PKG_RELEASE}.x86_64.rpm ~/st2-auth-backend-sso-saml2/build/el8
             # List poduced artifacts
-            ls -la ~/st2-sso-backend/build/*/*
+            ls -la ~/st2-auth-backend-sso-saml2/build/*/*
       - store_artifacts:
-          path: ~/st2-sso-backend/build
+          path: ~/st2-auth-backend-sso-saml2/build
           destination: packages
       - persist_to_workspace:
-          root: ~/st2-sso-backend
+          root: ~/st2-auth-backend-sso-saml2
           paths:
             - .circle/packagecloud.sh
             - build
@@ -152,7 +152,7 @@ jobs:
       - image: circleci/ruby:2.4
     working_directory: /tmp/deploy
     environment:
-      DISTROS: trusty xenial bionic el7 el8
+      DISTROS: xenial bionic el7 el8
     steps:
       - checkout
       - attach_workspace:
@@ -174,7 +174,7 @@ jobs:
             done
 workflows:
   version: 2
-  # Workflow which runs on each posh
+  # Workflow which runs on each push
   build_test_deploy_on_push:
     jobs:
       - build_and_test_python27

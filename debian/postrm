@@ -20,7 +20,7 @@ set -e
 
 uninstall_package() {
   PIP=/opt/stackstorm/st2/bin/pip
-  ${PIP} uninstall -y --quiet st2-enterprise-sso-backend 1>/dev/null || :
+  ${PIP} uninstall -y --quiet st2-auth-backend-sso-saml2 1>/dev/null || :
 }
 
 case "$1" in

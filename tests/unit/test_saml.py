@@ -24,7 +24,7 @@ from six.moves import http_client
 import st2auth
 
 from st2auth import app
-from st2auth_sso_backends import saml
+from st2auth_sso_saml2 import saml
 from st2common.exceptions import auth as auth_exc
 from st2tests import config
 from st2tests import DbTestCase

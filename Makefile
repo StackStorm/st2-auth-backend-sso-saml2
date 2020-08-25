@@ -14,13 +14,13 @@
 
 ROOT_DIR ?= $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CURRENT_DIR ?= $(shell pwd)
-PKG_NAME := st2-sso-backend
+PKG_NAME := st2-auth-backend-sso-saml2
 PKG_RELEASE ?= 1
 WHEELSDIR ?= opt/stackstorm/share/wheels
 VIRTUALENV_DIR ?= virtualenv
 ST2_REPO_PATH ?= /tmp/st2
 ST2_REPO_URL ?= git@github.com:StackStorm/st2.git
-ST2_REPO_BRANCH ?= st2auth-sso
+ST2_REPO_BRANCH ?= master
 
 # Packaging Options
 PKGDISTDIR = dist
@@ -175,14 +175,14 @@ compilepy3:
 	@echo
 	@echo "==================== flake8 ===================="
 	@echo
-	. $(VIRTUALENV_DIR)/bin/activate; flake8 --config=lint-configs/python/.flake8-proprietary st2auth_sso_backends/ tests/
+	. $(VIRTUALENV_DIR)/bin/activate; flake8 --config=lint-configs/python/.flake8 st2auth_sso_saml2/ tests/
 
 .PHONY: .pylint
 .pylint:
 	@echo
 	@echo "==================== pylint ===================="
 	@echo
-	. $(VIRTUALENV_DIR)/bin/activate; pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc --load-plugins=pylint_plugins.api_models --load-plugins=pylint_plugins.db_models st2auth_sso_backends/
+	. $(VIRTUALENV_DIR)/bin/activate; pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc --load-plugins=pylint_plugins.api_models --load-plugins=pylint_plugins.db_models st2auth_sso_saml2/
 
 .PHONY: .unit-tests
 .unit-tests:
@@ -246,6 +246,7 @@ requirements: .clone_st2_repo virtualenv
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/test-requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements-test.txt
 	@echo ""
 	@echo "================== install runners ===================="
 	@echo ""
@@ -273,6 +274,7 @@ requirements-ci:
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r $(ST2_REPO_PATH)/test-requirements.txt
 	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements.txt
+	$(VIRTUALENV_DIR)/bin/pip install --cache-dir $(HOME)/.pip-cache $(PIP_OPTIONS) -r requirements-test.txt
 
 .PHONY: virtualenv
 virtualenv: $(VIRTUALENV_DIR)/bin/activate
@@ -328,4 +330,4 @@ deb:
 	dpkg-buildpackage -b -uc -us -j`_cpunum=$$(nproc); echo "${_cpunum:-1}"`
 
 rpm:
-	rpmbuild -bb rpm/st2-sso-backend.spec
+	rpmbuild -bb rpm/st2-auth-backend-sso-saml2.spec

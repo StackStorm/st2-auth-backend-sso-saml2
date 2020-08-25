@@ -24,22 +24,22 @@ check_pip_version()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REQUIREMENTS_FILE = os.path.join(BASE_DIR, 'requirements.txt')
-INIT_FILE = os.path.join(BASE_DIR, 'st2auth_sso_backends', '__init__.py')
+INIT_FILE = os.path.join(BASE_DIR, 'st2auth_sso_saml2', '__init__.py')
 
 version = parse_version_string(INIT_FILE)
 install_reqs, dep_links = fetch_requirements(REQUIREMENTS_FILE)
 
 setup(
-    name='st2-enterprise-sso-backend',
+    name='st2-auth-backend-sso-saml2',
     version=version,
-    description='SSO backend for StackStorm.',
+    description='SAML2 SSO backend for StackStorm.',
     author='StackStorm, Inc.',
     author_email='info@stackstorm.com',
     url='https://stackstorm.com/',
     license='Apache License (2.0)',
     download_url='https://stackstorm.com/',
     classifiers=[
-        'License :: Other/Proprietary License'
+        'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
@@ -49,7 +49,7 @@ setup(
     ],
     platforms=['Any'],
     scripts=[],
-    provides=['st2auth_sso_backends'],
+    provides=['st2auth_sso_saml2'],
     packages=find_packages(),
     include_package_data=True,
     install_requires=install_reqs,
@@ -58,7 +58,7 @@ setup(
     zip_safe=False,
     entry_points={
         'st2auth.sso.backends': [
-            'saml2 = st2auth_sso_backends.saml:SAML2SingleSignOnBackend'
+            'saml2 = st2auth_sso_saml2.saml:SAML2SingleSignOnBackend'
         ]
     }
 )
