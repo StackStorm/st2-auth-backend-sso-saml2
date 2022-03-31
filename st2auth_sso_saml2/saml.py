@@ -139,8 +139,9 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             relay_state = json.loads(getattr(response, 'RelayState')[0]) if has_relay_state else {}
 
             if (has_relay_state and (
-                    'id' not in relay_state or 'referer' not in relay_state or
-                    self._get_relay_state_id() != relay_state['id'] or
+                    'referer' not in relay_state or
+                    # 'id' not in relay_state or 
+                    # self._get_relay_state_id() != relay_state['id'] or
                     not relay_state['referer'].startswith(self.entity_id))):
                 error_message = 'The value of the RelayState in the response does not match.'
                 self._handle_verification_error(error_message)
@@ -161,8 +162,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                 'referer': relay_state.get('referer') or self.entity_id,
                 'username': str(authn_response.ava['Username'][0]),
                 'email': str(authn_response.ava['Email'][0]),
-                'last_name': str(authn_response.ava['LastName'][0]),
-                'first_name': str(authn_response.ava['FirstName'][0])
+                'last_name': str(authn_response.ava['LastName'][0]) if 'LastName' in authn_response.ava else None,
+                'first_name': str(authn_response.ava['FirstName'][0]) if 'FirstName' in authn_response.ava else None
             }
         except Exception:
             message = 'Error encountered while verifying the SAML2 response.'
