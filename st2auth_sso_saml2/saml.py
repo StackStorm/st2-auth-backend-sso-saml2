@@ -41,7 +41,6 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
     def __init__(self, entity_id, metadata_url, debug=False):
         self.entity_id = entity_id
-        self.relay_state_id = uuid.uuid4().hex
         self.https_acs_url = '%s/auth/sso/callback' % self.entity_id
         self.saml_metadata_url = metadata_url
         self.saml_metadata = requests.get(self.saml_metadata_url)
@@ -77,9 +76,6 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         if debug:
             self.saml_client_settings['debug'] = 1
 
-    def _get_relay_state_id(self):
-        return self.relay_state_id
-
     def _get_saml_client(self):
         saml_config = saml2.config.Config()
         saml_config.load(self.saml_client_settings)
@@ -91,8 +87,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         raise auth_exc.SSOVerificationError(error_message)
 
     def get_request_redirect_url(self, referer):
-        if not referer.startswith(self.entity_id):
-            self._handle_verification_error('Invalid referer.')
+        if not referer.startswith(self.entity_id) and not referer.startswith("http://localhost:"):
+            self._handle_verification_error('Invalid referer -- it should be either some localhost endpoint or the SSO configured entity')
 
         # The relay state will be echo back from the Idp. This adds another layer of
         # verification to ensure the unique value passed during the request step is
@@ -140,8 +136,6 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
             if (has_relay_state and (
                     'referer' not in relay_state or
-                    # 'id' not in relay_state or 
-                    # self._get_relay_state_id() != relay_state['id'] or
                     not relay_state['referer'].startswith(self.entity_id))):
                 error_message = 'The value of the RelayState in the response does not match.'
                 self._handle_verification_error(error_message)
