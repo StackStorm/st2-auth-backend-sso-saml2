@@ -41,11 +41,15 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
     MANDATORY_SAML_RESPONSE_ATTRIBUTES = ['Username', 'Email'] 
 
-    def __init__(self, entity_id, metadata_url, debug=False):
+    def __init__(self, entity_id, metadata_url, role_mapping=None, debug=False):
         self.entity_id = entity_id
         self.https_acs_url = '%s/auth/sso/callback' % self.entity_id
         self.saml_metadata_url = metadata_url
         self.saml_metadata = requests.get(self.saml_metadata_url)
+        
+        if role_mapping:
+            self.role_mapping = role_mapping
+            LOG.info("Role mapping configuration: %s", role_mapping)
 
         LOG.debug('METADATA GET FROM "%s": %s' % (self.saml_metadata_url, self.saml_metadata.text))
 
@@ -78,8 +82,11 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         if debug:
             self.saml_client_settings['debug'] = 1
 
-    def _get_saml_attribute_or_none(self, authn_response, field):
+    def _get_single_saml_attribute_or_none(self, authn_response, field):
         return str(authn_response.ava[field][0]) if field in authn_response.ava and len(authn_response.ava[field]) > 0 else None
+
+    def _get_saml_attribute_list_or_empty(self, authn_response, field):
+        return authn_response.ava[field] if field in authn_response.ava else []
 
     def _get_saml_client(self):
         saml_config = saml2.config.Config()
@@ -127,6 +134,13 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             saml2.BINDING_HTTP_POST
         )
 
+    def _map_roles(self, sso_roles):
+        granted_roles = []
+        for sso_role in sso_roles:
+            granted_roles += self.role_mapping.get(sso_role, [])
+        return list(set(granted_roles))
+
+
     def get_request_id_from_response(self, response):
         authn_response = self._get_authn_response_from_response(response)
         return getattr(authn_response, 'in_response_to', None)
@@ -165,9 +179,13 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
             LOG.debug("Validating expected fields are present: %s", self.MANDATORY_SAML_RESPONSE_ATTRIBUTES)
             for field in self.MANDATORY_SAML_RESPONSE_ATTRIBUTES:
-                if self._get_saml_attribute_or_none(authn_response, field) is None:
+                if self._get_single_saml_attribute_or_none(authn_response, field) is None:
                     self._handle_verification_error('Expected field "%s" to be present in the SAML response!', field)
 
+            sso_roles = self._get_saml_attribute_list_or_empty(authn_response, 'Role')
+            roles = self._map_roles(sso_roles)
+
+            LOG.debug("Roles received from SSO [%s] are mapped to: %s", sso_roles, roles)
 
             #
             # At this point, SAML response is valid, and wee good :)
@@ -175,10 +193,11 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
             verified_user = {
                 'referer': relay_state.get('referer') or self.entity_id,
-                'username': self._get_saml_attribute_or_none(authn_response, 'Username'),
-                'email': self._get_saml_attribute_or_none(authn_response, 'Email'),
-                'last_name': self._get_saml_attribute_or_none(authn_response, 'LastName'),
-                'first_name': self._get_saml_attribute_or_none(authn_response, 'FirstName')
+                'username': self._get_single_saml_attribute_or_none(authn_response, 'Username'),
+                'email': self._get_single_saml_attribute_or_none(authn_response, 'Email'),
+                'last_name': self._get_single_saml_attribute_or_none(authn_response, 'LastName'),
+                'first_name': self._get_single_saml_attribute_or_none(authn_response, 'FirstName'),
+                'roles': roles
             }
         except ValueError:
             raise 
