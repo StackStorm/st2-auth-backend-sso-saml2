@@ -182,7 +182,7 @@ compilepy3:
 	@echo
 	@echo "==================== pylint ===================="
 	@echo
-	. $(VIRTUALENV_DIR)/bin/activate; pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc --load-plugins=pylint_plugins.api_models --load-plugins=pylint_plugins.db_models st2auth_sso_saml2/
+	. $(VIRTUALENV_DIR)/bin/activate; pylint -j $(PYLINT_CONCURRENCY) -E --rcfile=./lint-configs/python/.pylintrc st2auth_sso_saml2/
 
 .PHONY: .unit-tests
 .unit-tests:
