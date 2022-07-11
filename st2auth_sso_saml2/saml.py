@@ -39,7 +39,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
     SAML2 SSO authentication backend.
     """
 
-    MANDATORY_SAML_RESPONSE_ATTRIBUTES = ['Username', 'Email'] 
+    MANDATORY_SAML_RESPONSE_ATTRIBUTES = ['Username'] 
 
     def __init__(self, entity_id, metadata_url, role_mapping=None, debug=False):
         self.entity_id = entity_id
@@ -129,10 +129,14 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         saml_response = getattr(response, 'SAMLResponse')[0]
         saml_client = self._get_saml_client()
 
-        return saml_client.parse_authn_request_response(
-            saml_response,
-            saml2.BINDING_HTTP_POST
-        )
+        try:
+            return saml_client.parse_authn_request_response(
+                saml_response,
+                saml2.BINDING_HTTP_POST
+            )
+        except saml2.validate.ResponseLifetimeExceed as e:
+            LOG.debug("SAML response is too old, error: %s", e)
+            self._handle_verification_error("SAML response is too old!")
 
     def _map_roles(self, sso_roles):
         granted_roles = []
