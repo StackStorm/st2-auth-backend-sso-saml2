@@ -39,14 +39,14 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
     SAML2 SSO authentication backend.
     """
 
-    MANDATORY_SAML_RESPONSE_ATTRIBUTES = ['Username'] 
+    MANDATORY_SAML_RESPONSE_ATTRIBUTES = ['Username']
 
     def __init__(self, entity_id, metadata_url, role_mapping=None, debug=False):
         self.entity_id = entity_id
         self.https_acs_url = '%s/auth/sso/callback' % self.entity_id
         self.saml_metadata_url = metadata_url
         self.saml_metadata = requests.get(self.saml_metadata_url)
-        
+
         if role_mapping:
             self.role_mapping = role_mapping
             LOG.info("Role mapping configuration: %s", role_mapping)
@@ -83,7 +83,9 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             self.saml_client_settings['debug'] = 1
 
     def _get_single_saml_attribute_or_none(self, authn_response, field):
-        return str(authn_response.ava[field][0]) if field in authn_response.ava and len(authn_response.ava[field]) > 0 else None
+        if field in authn_response.ava and len(authn_response.ava[field]) > 0:
+            return str(authn_response.ava[field][0])
+        return None
 
     def _get_saml_attribute_list_or_empty(self, authn_response, field):
         return authn_response.ava[field] if field in authn_response.ava else []
@@ -100,14 +102,18 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
     def get_request_redirect_url(self, id, referer):
         if not referer.startswith(self.entity_id) and not referer.startswith("http://localhost:"):
-            self._handle_verification_error('Invalid referer -- it should be either some localhost endpoint or the SSO configured entity')
+            self._handle_verification_error('Invalid referer -- \
+                it should be either some localhost endpoint or the SSO configured entity')
 
         relay_state = {
             'referer': referer
         }
 
         saml_client = self._get_saml_client()
-        reqid, info = saml_client.prepare_for_authenticate(relay_state=json.dumps(relay_state), message_id=id)
+        reqid, info = saml_client.prepare_for_authenticate(
+            relay_state=json.dumps(relay_state),
+            message_id=id
+        )
 
         # Get the IdP URL to send the SAML request to.
         redirect_url = [v for k, v in six.iteritems(dict(info['headers'])) if k == 'Location'][0]
@@ -144,11 +150,9 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             granted_roles += self.role_mapping.get(sso_role, [])
         return list(set(granted_roles))
 
-
     def get_request_id_from_response(self, response):
         authn_response = self._get_authn_response_from_response(response)
         return getattr(authn_response, 'in_response_to', None)
-
 
     def verify_response(self, response):
         try:
@@ -180,11 +184,13 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             if not authn_response:
                 self._handle_verification_error('Unable to parse the data in SAMLResponse.')
 
+            LOG.debug("Validating expected fields are present: %s",
+                self.MANDATORY_SAML_RESPONSE_ATTRIBUTES)
 
-            LOG.debug("Validating expected fields are present: %s", self.MANDATORY_SAML_RESPONSE_ATTRIBUTES)
             for field in self.MANDATORY_SAML_RESPONSE_ATTRIBUTES:
                 if self._get_single_saml_attribute_or_none(authn_response, field) is None:
-                    self._handle_verification_error('Expected field "%s" to be present in the SAML response!', field)
+                    self._handle_verification_error('Expected field "%s" to be present \
+                        in the SAML response!', field)
 
             sso_roles = self._get_saml_attribute_list_or_empty(authn_response, 'Role')
             roles = self._map_roles(sso_roles)
@@ -201,7 +207,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                 'roles': roles
             }
         except ValueError:
-            raise 
+            raise
         except Exception:
             message = 'Error encountered while verifying the SAML2 response.'
             LOG.exception(message)
