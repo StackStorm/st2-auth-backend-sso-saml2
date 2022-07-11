@@ -95,8 +95,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
         return saml2.client.Saml2Client(config=saml_config)
 
-    def _handle_verification_error(self, error_message):
-        raise ValueError(error_message)
+    def _handle_verification_error(self, error_message, *args):
+        raise ValueError(error_message % args)
 
     def get_request_redirect_url(self, id, referer):
         if not referer.startswith(self.entity_id) and not referer.startswith("http://localhost:"):
@@ -194,9 +194,6 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             verified_user = {
                 'referer': relay_state.get('referer') or self.entity_id,
                 'username': self._get_single_saml_attribute_or_none(authn_response, 'Username'),
-                'email': self._get_single_saml_attribute_or_none(authn_response, 'Email'),
-                'last_name': self._get_single_saml_attribute_or_none(authn_response, 'LastName'),
-                'first_name': self._get_single_saml_attribute_or_none(authn_response, 'FirstName'),
                 'roles': roles
             }
         except ValueError:
