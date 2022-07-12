@@ -102,8 +102,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
     def get_request_redirect_url(self, id, referer):
         if not referer.startswith(self.entity_id) and not referer.startswith("http://localhost:"):
-            self._handle_verification_error('Invalid referer -- \
-                it should be either some localhost endpoint or the SSO configured entity')
+            self._handle_verification_error('Invalid referer -- '\
+                'it should be either some localhost endpoint or the SSO configured entity')
 
         relay_state = {
             'referer': referer
@@ -128,14 +128,18 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             self._handle_verification_error('The SAMLResponse attribute is null.')
 
         # The SAMLResponse is an array and it cannot be empty.
-        if len(getattr(response, 'SAMLResponse')) <= 0:
-            self._handle_verification_error('The SAMLResponse attribute is empty.')
+        if not isinstance(getattr(response, 'SAMLResponse'), list) \
+            or len(getattr(response, 'SAMLResponse')) == 0 \
+            or not isinstance(getattr(response, 'SAMLResponse')[0], str):
+            self._handle_verification_error('The SAMLResponse attribute should be a list of one or more strings')
 
         # Parse the response and verify signature.
         saml_response = getattr(response, 'SAMLResponse')[0]
+
         saml_client = self._get_saml_client()
 
         try:
+            LOG.debug("Parsing authn response")
             return saml_client.parse_authn_request_response(
                 saml_response,
                 saml2.BINDING_HTTP_POST
