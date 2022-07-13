@@ -68,7 +68,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             LOG.debug("Validating role mapping configuration")
             if not self._is_valid_role_mapping(role_mapping):
                 raise TypeError("invalid 'role_mapping' parameter - "
-                    "it is supposed to be a dict[str, list[str]] object!")
+                    "it is supposed to be a dict[str, list[str]] object or None!")
 
             self.role_mapping = role_mapping
             LOG.info("Role mapping configuration: %s", role_mapping)
@@ -219,20 +219,24 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                     self._handle_verification_error('Expected field "%s" to be present \
                         in the SAML response!', field)
 
-            sso_roles = self._get_saml_attribute_list_or_empty(authn_response, 'Role')
-            roles = self._map_roles(sso_roles)
-
-            LOG.debug("Roles received from SSO [%s] are mapped to: %s", sso_roles, roles)
-
-            #
-            # At this point, SAML response is valid, and wee good :)
-            #
-
+            # Base verified user to be returned
             verified_user = {
                 'referer': relay_state.get('referer') or self.entity_id,
-                'username': self._get_single_saml_attribute_or_none(authn_response, 'Username'),
-                'roles': roles
+                'username': self._get_single_saml_attribute_or_none(authn_response, 'Username')
             }
+
+            # Role mapping :)
+            if hasattr(self, 'role_mapping') and self.role_mapping:
+                sso_roles = self._get_saml_attribute_list_or_empty(authn_response, 'Role')
+                roles = self._map_roles(sso_roles)
+
+                LOG.debug("Roles received from SSO [%s] are mapped to: %s", sso_roles, roles)
+                verified_user['roles'] = roles
+            else:
+                LOG.debug("Role mapping disabled, so not mapping incoming roles!")
+
+            return verified_user
+
         except ValueError:
             raise
         except Exception:

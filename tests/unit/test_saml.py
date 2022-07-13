@@ -20,6 +20,8 @@ import time
 import calendar
 import saml2
 
+import requests
+
 from oslo_config import cfg
 from six.moves import http_client
 
@@ -301,6 +303,10 @@ class BaseSAML2Controller(DbTestCase):
     backend_instance = None
 
     @classmethod
+    @mock.patch.object(
+        requests,
+        'get',
+        mock.MagicMock(return_value=MockSamlMetadata()))
     def setupBackendConfig(cls, sso_backend_kwargs=default_sso_backend_kwargs, **kwargs):
         config.parse_args()
         kwargs_json = json.dumps(sso_backend_kwargs)
@@ -308,13 +314,11 @@ class BaseSAML2Controller(DbTestCase):
         cfg.CONF.set_override(name='sso_backend', override='saml2', group='auth')
         cfg.CONF.set_override(name='sso_backend_kwargs', override=kwargs_json, group='auth')
 
-        with mock.patch('requests.get') as mock_requests_get:
-            mock_requests_get.return_value = MockSamlMetadata()
-            cls.app = TestApp(app.setup_app(), **kwargs)
+        cls.app = TestApp(app.setup_app(), **kwargs)
 
         # Delay import here otherwise setupClass will not have run.
         from st2auth.controllers.v1 import sso as sso_api_controller
-        instance = sso_api_controller.SSO_BACKEND
+        instance = sso_api_controller.SSO_BACKEND = st2auth_sso.get_sso_backend()
 
         return instance
 
@@ -379,7 +383,7 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
         self.assertRaisesRegex(TypeError, 
             (
                 "invalid 'role_mapping' parameter - it is supposed to be"
-                " a dict\[str, list\[str\]\] object!"
+                " a dict\[str, list\[str\]\] object or None!"
             ), 
             self._test_cls_init_valid_metadata_and_entity,
             {
@@ -395,7 +399,7 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
         self.assertRaisesRegex(TypeError, 
             (
                 "invalid 'role_mapping' parameter - it is supposed to be"
-                " a dict\[str, list\[str\]\] object!"
+                " a dict\[str, list\[str\]\] object or None!"
             ), 
             self._test_cls_init_valid_metadata_and_entity,
             {
@@ -455,13 +459,17 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
 
     # Helper method for similar test cases.. maybe there's a more 'table-driven' way
     # of doing this but we should be okay :)
-    def _test_idp_callback_response_helper(self, expected_response, callback_request, status_code):
+    def _test_idp_callback_response_helper(self, expected_response, callback_request, status_code, expected_response_type='json'):
         response = self.app.post_json(SSO_CALLBACK_V1_PATH, callback_request, expect_errors=True)
         self.assertTrue(response.status_code, status_code)
-        self.assertDictEqual(response.json, expected_response)
+
+        if expected_response_type == 'json':
+            self.assertDictEqual(response.json, expected_response)
+        else:
+            self.assertEqual(response.body.decode('utf-8'), expected_response)
 
     # Helper method for triggering a processing of a valid SAML Response (the one from the mock :)
-    def _test_idp_callback_valid_response_helper(self, expected_response, relay_state, status_code):
+    def _test_idp_callback_valid_response_helper(self, expected_response, relay_state, status_code, expected_response_type='json'):
         # Making sure we ignore old responses :)
         old = saml.SAML2SingleSignOnBackend._get_saml_client
         def wrapper(self):
@@ -475,8 +483,11 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
         self._test_idp_callback_response_helper(
             expected_response,
             {'SAMLResponse': [MOCK_SAML_RESPONSE], 'RelayState': relay_state},
-            status_code
+            status_code,
+            expected_response_type
         )
+
+        saml.SAML2SingleSignOnBackend._get_saml_client = old
 
 
     def test_idp_callback_missing_response(self):
@@ -525,6 +536,11 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
             http_client.UNAUTHORIZED
         )
 
+    # Mock internal call to make it through
+    @mock.patch.object(
+        saml2.response.StatusResponse,
+        'issue_instant_ok',
+        mock.MagicMock(return_value=True))
     def test_idp_callback_old_response(self):
         self._test_idp_callback_response_helper(
             {'faultstring': 'SAML response is too old!'},
@@ -567,29 +583,17 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
             http_client.OK
         )
 
-    # @mock.patch.object(
-    #     saml2.client.Saml2Client,
-    #     'parse_authn_request_response',
-    #     mock.MagicMock(return_value=MockAuthnResponse()))
-    def test_idp_callback(self):
+    def test_idp_callback_empty_relay_state(self):
+        self._test_idp_callback_valid_response_helper(
+            {'faultstring': "The RelayState attribute is null."},
+            None,
+            http_client.UNAUTHORIZED,
+        )
+
+    def test_idp_callback_with_relay_state(self):
         self._test_idp_callback_valid_response_helper(
             st2auth.controllers.v1.sso.CALLBACK_SUCCESS_RESPONSE_BODY % MOCK_REFERER,
             [json.dumps({'referer': MOCK_REFERER})],
-            http_client.OK
+            http_client.OK,
+            'str'
         )
-
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_get_relay_state_id',
-        mock.MagicMock(return_value='12345'))
-    @mock.patch.object(
-        saml2.client.Saml2Client,
-        'parse_authn_request_response',
-        mock.MagicMock(return_value=MockAuthnResponse()))
-    def test_idp_callback_with_relay_state(self):
-        relay_state = json.dumps({'id': '12345', 'referer': MOCK_REFERER})
-        saml_response = {'SAMLResponse': ['1234567890ABCDEFG'], 'RelayState': [relay_state]}
-        expected_body = st2auth.controllers.v1.sso.CALLBACK_SUCCESS_RESPONSE_BODY % MOCK_REFERER
-        response = self.app.post_json(SSO_CALLBACK_V1_PATH, saml_response, expect_errors=False)
-        self.assertTrue(response.status_code, http_client.OK)
-        self.assertEqual(expected_body, response.body.decode('utf-8'))
