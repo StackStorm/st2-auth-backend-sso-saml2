@@ -337,7 +337,7 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
 
     automatically_setup_backend = False
 
-    def _test_cls_init_valid_metadata_and_entity(self, backend_config):
+    def _test_cls_init_default_assertions(self, backend_config):
         instance = self.setupBackendConfig(backend_config)
         self.assertEqual(instance.entity_id, MOCK_ENTITY_ID)
         self.assertEqual(instance.https_acs_url, MOCK_ACS_URL)
@@ -366,12 +366,12 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
         self.assertDictEqual(instance.saml_client_settings, expected_saml_client_settings)
 
     def test_cls_init_no_roles(self):
-        self._test_cls_init_valid_metadata_and_entity(
+        self._test_cls_init_default_assertions(
             {'metadata_url': MOCK_METADATA_URL, 'entity_id': MOCK_ENTITY_ID})
 
 
     def test_cls_init_valid_roles(self):
-        self._test_cls_init_valid_metadata_and_entity({
+        self._test_cls_init_default_assertions({
             'metadata_url': MOCK_METADATA_URL, 
             'entity_id': MOCK_ENTITY_ID,
             'role_mapping': {
@@ -385,7 +385,7 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
                 "invalid 'role_mapping' parameter - it is supposed to be"
                 " a dict\[str, list\[str\]\] object or None!"
             ), 
-            self._test_cls_init_valid_metadata_and_entity,
+            self.setupBackendConfig,
             {
                 'metadata_url': MOCK_METADATA_URL, 
                 'entity_id': MOCK_ENTITY_ID,
@@ -401,7 +401,7 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
                 "invalid 'role_mapping' parameter - it is supposed to be"
                 " a dict\[str, list\[str\]\] object or None!"
             ), 
-            self._test_cls_init_valid_metadata_and_entity,
+            self.setupBackendConfig,
             {
                 'metadata_url': MOCK_METADATA_URL, 
                 'entity_id': MOCK_ENTITY_ID,
