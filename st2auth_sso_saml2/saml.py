@@ -41,6 +41,23 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
     MANDATORY_SAML_RESPONSE_ATTRIBUTES = ['Username']
 
+    def _is_valid_role_mapping(self, role_mapping):
+        # Supposed to be a dict!
+        if not isinstance(role_mapping, dict):
+            return False
+        # Each entry has to be a list[str]
+        for k,v in role_mapping.items():
+            # k = str
+            # v = list
+            if not isinstance(k, str) \
+                or not isinstance(v, list):
+                return False
+            # v is ssupposed to be a list[str]
+            for r in v:
+                if not isinstance(r, str):
+                    return False
+        return True
+
     def __init__(self, entity_id, metadata_url, role_mapping=None, debug=False):
         self.entity_id = entity_id
         self.https_acs_url = '%s/auth/sso/callback' % self.entity_id
@@ -48,6 +65,11 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         self.saml_metadata = requests.get(self.saml_metadata_url)
 
         if role_mapping:
+            LOG.debug("Validating role mapping configuration")
+            if not self._is_valid_role_mapping(role_mapping):
+                raise TypeError("invalid 'role_mapping' parameter - "
+                    "it is supposed to be a dict[str, list[str]] object!")
+
             self.role_mapping = role_mapping
             LOG.info("Role mapping configuration: %s", role_mapping)
 
@@ -177,11 +199,12 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             relay_state = json.loads(getattr(response, 'RelayState')[0]) if has_relay_state else {}
             LOG.debug("Incoming relay state is [%s]", relay_state)
 
-            if (has_relay_state and (
-                    'referer' not in relay_state or
-                    not relay_state['referer'].startswith(self.entity_id))):
-                error_message = 'The value of the RelayState in the response does not match.'
-                self._handle_verification_error(error_message)
+            if has_relay_state:
+                if 'referer' not in relay_state:
+                    self._handle_verification_error('The RelayState is missing the referer')
+                elif not relay_state['referer'].startswith(self.entity_id):
+                    self._handle_verification_error('The RelayState referer [%s] is not allowed.'
+                        ' It must come from the trusted SAML entity', relay_state['referer'])
 
             authn_response = self._get_authn_response_from_response(response)
 

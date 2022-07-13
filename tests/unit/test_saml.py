@@ -24,13 +24,14 @@ from oslo_config import cfg
 from six.moves import http_client
 
 import st2auth
-
+from st2auth import sso as st2auth_sso
 from st2auth import app
 from st2auth_sso_saml2 import saml
 from st2common.exceptions import auth as auth_exc
 from st2tests import config
 from st2tests import DbTestCase
 from st2tests.api import TestApp
+from st2common.services.access import create_web_sso_request
 
 
 SSO_V1_PATH = '/v1/sso'
@@ -295,13 +296,13 @@ class MockAuthnResponse(object):
 
 class BaseSAML2Controller(DbTestCase):
 
+    automatically_setup_backend = True
+    default_sso_backend_kwargs = {'metadata_url': MOCK_METADATA_URL, 'entity_id': MOCK_ENTITY_ID}
+    backend_instance = None
+
     @classmethod
-    def setUpClass(cls, **kwargs):
-        super(BaseSAML2Controller, cls).setUpClass()
-
+    def setupBackendConfig(cls, sso_backend_kwargs=default_sso_backend_kwargs, **kwargs):
         config.parse_args()
-
-        sso_backend_kwargs = {'metadata_url': MOCK_METADATA_URL, 'entity_id': MOCK_ENTITY_ID}
         kwargs_json = json.dumps(sso_backend_kwargs)
         cfg.CONF.set_override(name='sso', override=True, group='auth')
         cfg.CONF.set_override(name='sso_backend', override='saml2', group='auth')
@@ -311,14 +312,29 @@ class BaseSAML2Controller(DbTestCase):
             mock_requests_get.return_value = MockSamlMetadata()
             cls.app = TestApp(app.setup_app(), **kwargs)
 
-
-class TestSingleSignOnControllerWithSAML2(BaseSAML2Controller):
-
-    def test_cls_init(self):
         # Delay import here otherwise setupClass will not have run.
         from st2auth.controllers.v1 import sso as sso_api_controller
         instance = sso_api_controller.SSO_BACKEND
 
+        return instance
+
+
+    @classmethod
+    def setUpClass(cls, **kwargs):
+        super(BaseSAML2Controller, cls).setUpClass()
+
+        if cls.automatically_setup_backend:
+            cls.backend_instance = BaseSAML2Controller.setupBackendConfig(
+                cls.default_sso_backend_kwargs, **kwargs)
+
+
+# Tests for initialization
+class TestSAMLSSOBackend(BaseSAML2Controller):
+
+    automatically_setup_backend = False
+
+    def _test_cls_init_valid_metadata_and_entity(self, backend_config):
+        instance = self.setupBackendConfig(backend_config)
         self.assertEqual(instance.entity_id, MOCK_ENTITY_ID)
         self.assertEqual(instance.https_acs_url, MOCK_ACS_URL)
         self.assertEqual(instance.saml_metadata_url, MOCK_METADATA_URL)
@@ -344,6 +360,70 @@ class TestSingleSignOnControllerWithSAML2(BaseSAML2Controller):
         }
 
         self.assertDictEqual(instance.saml_client_settings, expected_saml_client_settings)
+
+    def test_cls_init_no_roles(self):
+        self._test_cls_init_valid_metadata_and_entity(
+            {'metadata_url': MOCK_METADATA_URL, 'entity_id': MOCK_ENTITY_ID})
+
+
+    def test_cls_init_valid_roles(self):
+        self._test_cls_init_valid_metadata_and_entity({
+            'metadata_url': MOCK_METADATA_URL, 
+            'entity_id': MOCK_ENTITY_ID,
+            'role_mapping': {
+                'test_role': ['test', '123']
+            }
+        })
+
+    def test_cls_init_invalid_roles_spec_list_of_number(self):
+        self.assertRaisesRegex(TypeError, 
+            (
+                "invalid 'role_mapping' parameter - it is supposed to be"
+                " a dict\[str, list\[str\]\] object!"
+            ), 
+            self._test_cls_init_valid_metadata_and_entity,
+            {
+                'metadata_url': MOCK_METADATA_URL, 
+                'entity_id': MOCK_ENTITY_ID,
+                'role_mapping': {
+                    'test_role1': ['123', 'role2'],
+                    'test_role': [123, 333]
+                }
+        })
+
+    def test_cls_init_invalid_roles_spec_string(self):
+        self.assertRaisesRegex(TypeError, 
+            (
+                "invalid 'role_mapping' parameter - it is supposed to be"
+                " a dict\[str, list\[str\]\] object!"
+            ), 
+            self._test_cls_init_valid_metadata_and_entity,
+            {
+                'metadata_url': MOCK_METADATA_URL, 
+                'entity_id': MOCK_ENTITY_ID,
+                'role_mapping': {
+                    'test_role': 'test'
+                }
+        })
+
+    def test_cls_init_missing_args(self):
+        self.assertRaisesRegex(
+            TypeError, 
+            "missing 1 required positional argument: 'entity_id'", 
+            self.setupBackendConfig, 
+            {'metadata_url': MOCK_METADATA_URL}
+        )
+        
+    def test_cls_init_invalid_args(self):
+        self.assertRaisesRegex(
+            TypeError, 
+            "got an unexpected keyword argument 'invalid'", 
+            self.setupBackendConfig, 
+            {'metadata_url': MOCK_METADATA_URL, 'entity_id': MOCK_ENTITY_ID, 'invalid': 123}
+        )
+        
+
+class TestSingleSignOnControllerWithSAML2(BaseSAML2Controller):
 
     @mock.patch.object(
         saml.SAML2SingleSignOnBackend,
@@ -377,8 +457,27 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
     # of doing this but we should be okay :)
     def _test_idp_callback_response_helper(self, expected_response, callback_request, status_code):
         response = self.app.post_json(SSO_CALLBACK_V1_PATH, callback_request, expect_errors=True)
-        self.assertTrue(response.status_code, http_client.UNAUTHORIZED)
+        self.assertTrue(response.status_code, status_code)
         self.assertDictEqual(response.json, expected_response)
+
+    # Helper method for triggering a processing of a valid SAML Response (the one from the mock :)
+    def _test_idp_callback_valid_response_helper(self, expected_response, relay_state, status_code):
+        # Making sure we ignore old responses :)
+        old = saml.SAML2SingleSignOnBackend._get_saml_client
+        def wrapper(self):
+            client = old(self)
+            client.config.accepted_time_diff = 10000000
+            return client
+        saml.SAML2SingleSignOnBackend._get_saml_client = wrapper
+        # Create a request in the database for flow to proceed properly :)
+        create_web_sso_request(MOCK_SAML_RESPONSE_REQUEST_ID)
+
+        self._test_idp_callback_response_helper(
+            expected_response,
+            {'SAMLResponse': [MOCK_SAML_RESPONSE], 'RelayState': relay_state},
+            status_code
+        )
+
 
     def test_idp_callback_missing_response(self):
         self._test_idp_callback_response_helper(
@@ -433,112 +532,51 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
             http_client.UNAUTHORIZED
         )
 
-        # Making sure we ignore old responses :)
-        # old = saml.SAML2SingleSignOnBackend._get_saml_client
-        # def wrapper(self):
-        #     client = old(self)
-        #     client.config.accepted_time_diff = 10000000
-        #     return client
-        # saml.SAML2SingleSignOnBackend._get_saml_client = wrapper
-
-        # self._test_idp_callback_response_helper(
-        #     {'faultstring': 'The RelayState attribute is null.'},
-        #     {'SAMLResponse': [MOCK_SAML_RESPONSE], 'RelayState': None},
-        #     http_client.UNAUTHORIZED
-        # )
-
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_handle_verification_error',
-        mock.MagicMock(side_effect=auth_exc.SSOVerificationError('See unit test.')))
     def test_idp_callback_empty_relay_state(self):
-        expected_error = {'faultstring': 'Error encountered while verifying the SAML2 response.'}
-        expected_msg = 'The RelayState attribute is empty.'
-        saml_response = {'SAMLResponse': ['1234567890ABCDEFG'], 'RelayState': []}
-        response = self.app.post_json(SSO_CALLBACK_V1_PATH, saml_response, expect_errors=True)
-        self.assertTrue(response.status_code, http_client.UNAUTHORIZED)
-        self.assertDictEqual(response.json, expected_error)
-        self.assertTrue(saml.SAML2SingleSignOnBackend._handle_verification_error.called)
-        saml.SAML2SingleSignOnBackend._handle_verification_error.assert_called_with(expected_msg)
+        self._test_idp_callback_valid_response_helper(
+            {'faultstring': 'The RelayState attribute is empty.'},
+            [],
+            http_client.UNAUTHORIZED
+        )
+    def test_idp_callback_null_relay_state(self):
+        self._test_idp_callback_valid_response_helper(
+            {'faultstring': 'The RelayState attribute is null.'},
+            None,
+            http_client.UNAUTHORIZED
+        )
 
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_handle_verification_error',
-        mock.MagicMock(side_effect=auth_exc.SSOVerificationError('See unit test.')))
-    def test_idp_callback_relay_state_missing_id(self):
-        expected_error = {'faultstring': 'Error encountered while verifying the SAML2 response.'}
-        expected_msg = 'The value of the RelayState in the response does not match.'
-        relay_state = json.dumps({'referer': MOCK_REFERER})
-        saml_response = {'SAMLResponse': ['1234567890ABCDEFG'], 'RelayState': [relay_state]}
-        response = self.app.post_json(SSO_CALLBACK_V1_PATH, saml_response, expect_errors=True)
-        self.assertTrue(response.status_code, http_client.UNAUTHORIZED)
-        self.assertDictEqual(response.json, expected_error)
-        self.assertTrue(saml.SAML2SingleSignOnBackend._handle_verification_error.called)
-        saml.SAML2SingleSignOnBackend._handle_verification_error.assert_called_with(expected_msg)
-
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_handle_verification_error',
-        mock.MagicMock(side_effect=auth_exc.SSOVerificationError('See unit test.')))
-    def test_idp_callback_relay_state_bad_id(self):
-        expected_error = {'faultstring': 'Error encountered while verifying the SAML2 response.'}
-        expected_msg = 'The value of the RelayState in the response does not match.'
-        relay_state = json.dumps({'id': 'foobar', 'referer': MOCK_REFERER})
-        saml_response = {'SAMLResponse': ['1234567890ABCDEFG'], 'RelayState': [relay_state]}
-        response = self.app.post_json(SSO_CALLBACK_V1_PATH, saml_response, expect_errors=True)
-        self.assertTrue(response.status_code, http_client.UNAUTHORIZED)
-        self.assertDictEqual(response.json, expected_error)
-        self.assertTrue(saml.SAML2SingleSignOnBackend._handle_verification_error.called)
-        saml.SAML2SingleSignOnBackend._handle_verification_error.assert_called_with(expected_msg)
-
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_get_relay_state_id',
-        mock.MagicMock(return_value='12345'))
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_handle_verification_error',
-        mock.MagicMock(side_effect=auth_exc.SSOVerificationError('See unit test.')))
     def test_idp_callback_relay_state_missing_referer(self):
-        expected_error = {'faultstring': 'Error encountered while verifying the SAML2 response.'}
-        expected_msg = 'The value of the RelayState in the response does not match.'
-        relay_state = json.dumps({'id': '12345'})
-        saml_response = {'SAMLResponse': ['1234567890ABCDEFG'], 'RelayState': [relay_state]}
-        response = self.app.post_json(SSO_CALLBACK_V1_PATH, saml_response, expect_errors=True)
-        self.assertTrue(response.status_code, http_client.UNAUTHORIZED)
-        self.assertDictEqual(response.json, expected_error)
-        self.assertTrue(saml.SAML2SingleSignOnBackend._handle_verification_error.called)
-        saml.SAML2SingleSignOnBackend._handle_verification_error.assert_called_with(expected_msg)
+        self._test_idp_callback_valid_response_helper(
+            {'faultstring': 'The RelayState is missing the referer'},
+            [json.dumps({})],
+            http_client.UNAUTHORIZED
+        )
 
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_get_relay_state_id',
-        mock.MagicMock(return_value='12345'))
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_handle_verification_error',
-        mock.MagicMock(side_effect=auth_exc.SSOVerificationError('See unit test.')))
     def test_idp_callback_relay_state_bad_referer(self):
-        expected_error = {'faultstring': 'Error encountered while verifying the SAML2 response.'}
-        expected_msg = 'The value of the RelayState in the response does not match.'
-        relay_state = json.dumps({'id': '12345', 'referer': 'https://foobar'})
-        saml_response = {'SAMLResponse': ['1234567890ABCDEFG'], 'RelayState': [relay_state]}
-        response = self.app.post_json(SSO_CALLBACK_V1_PATH, saml_response, expect_errors=True)
-        self.assertTrue(response.status_code, http_client.UNAUTHORIZED)
-        self.assertDictEqual(response.json, expected_error)
-        self.assertTrue(saml.SAML2SingleSignOnBackend._handle_verification_error.called)
-        saml.SAML2SingleSignOnBackend._handle_verification_error.assert_called_with(expected_msg)
+        self._test_idp_callback_valid_response_helper(
+            {'faultstring': 'The RelayState referer [https://foobar] is not allowed. It must come from the trusted SAML entity'},
+            [json.dumps({'referer': 'https://foobar'})],
+            http_client.UNAUTHORIZED
+        )
 
-    @mock.patch.object(
-        saml2.client.Saml2Client,
-        'parse_authn_request_response',
-        mock.MagicMock(return_value=MockAuthnResponse()))
+
     def test_idp_callback(self):
-        saml_response = {'SAMLResponse': ['1234567890ABCDEFG']}
-        expected_body = st2auth.controllers.v1.sso.CALLBACK_SUCCESS_RESPONSE_BODY % MOCK_REFERER
-        response = self.app.post_json(SSO_CALLBACK_V1_PATH, saml_response, expect_errors=False)
-        self.assertTrue(response.status_code, http_client.OK)
-        self.assertEqual(expected_body, response.body.decode('utf-8'))
+        self._test_idp_callback_valid_response_helper(
+            {'faultstring': 'The RelayState referer [https://foobar] is not allowed. It must come from the trusted SAML entity'},
+            [json.dumps({'referer': 'https://foobar'})],
+            http_client.OK
+        )
+
+    # @mock.patch.object(
+    #     saml2.client.Saml2Client,
+    #     'parse_authn_request_response',
+    #     mock.MagicMock(return_value=MockAuthnResponse()))
+    def test_idp_callback(self):
+        self._test_idp_callback_valid_response_helper(
+            st2auth.controllers.v1.sso.CALLBACK_SUCCESS_RESPONSE_BODY % MOCK_REFERER,
+            [json.dumps({'referer': MOCK_REFERER})],
+            http_client.OK
+        )
 
     @mock.patch.object(
         saml.SAML2SingleSignOnBackend,
