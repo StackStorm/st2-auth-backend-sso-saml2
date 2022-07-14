@@ -19,6 +19,8 @@ import mock
 import time
 import calendar
 import saml2
+import urllib
+import re
 
 import requests
 
@@ -44,8 +46,8 @@ MOCK_ENTITY_ID = 'http://localhost'
 MOCK_ACS_URL = '%s/auth/sso/callback' % MOCK_ENTITY_ID
 # We need this format for the certs to work
 MOCK_IDP_URL = 'http://keycloak:8080/realms/stackstorm'
-MOCK_METADATA_URL = '%s/saml/metadata' % MOCK_IDP_URL
-MOCK_REDIRECT_URL = '%s/app/st2/sso/saml' % MOCK_IDP_URL
+MOCK_IDP_SAML_URL = '%s/protocol/saml' % MOCK_IDP_URL
+MOCK_METADATA_URL = '%s/protocol/saml/descriptor' % MOCK_IDP_URL
 MOCK_X509_KEYNAME = 'ItvZoblEFKfq1reEoL1QJL5qra8rrhMq107KbkflBs4'
 MOCK_X509_CERT = (
     'MIICozCCAYsCBgF/vGdbojANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDDApzdGFja3N0b3JtMB4XDTIy'
@@ -241,12 +243,12 @@ MOCK_SAML_METADATA_TEXT = (
     ':KeyName>{keyname}</ds:KeyName> <ds:X509Data> <ds:X509Certificate> {certificate}'
     ' </ds:X509Certificate> </ds:X509Data> </ds:KeyInfo> </md:KeyDescriptor> <md:Arti'
     'factResolutionService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Locati'
-    'on="{idp_redirect_url}/resolve" index="0"> </md:ArtifactResolutionServ'
+    'on="{idp_saml_url}/resolve" index="0"> </md:ArtifactResolutionServ'
     'ice> <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-'
-    'POST" Location="{idp_redirect_url}"></md:SingleLogoutService> <md:SingleLogoutSe'
+    'POST" Location="{idp_saml_url}"></md:SingleLogoutService> <md:SingleLogoutSe'
     'rvice Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="{id'
     'p_redirect_url}"></md:SingleLogoutService> <md:SingleLogoutService Binding="urn:'
-    'oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" Location="{idp_redirect_url}"></'
+    'oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" Location="{idp_saml_url}"></'
     'md:SingleLogoutService> <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-form'
     'at:persistent</md:NameIDFormat> <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nam'
     'eid-format:transient</md:NameIDFormat> <md:NameIDFormat>urn:oasis:names:tc:SAML:'
@@ -254,19 +256,13 @@ MOCK_SAML_METADATA_TEXT = (
     ':tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat> <md:SingleSignOnServic'
     'e Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{idp_redire'
     'ct_url}"></md:SingleSignOnService> <md:SingleSignOnService Binding="urn:oasis:na'
-    'mes:tc:SAML:2.0:bindings:HTTP-Redirect" Location="{idp_redirect_url}"></md:Singl'
+    'mes:tc:SAML:2.0:bindings:HTTP-Redirect" Location="{idp_saml_url}"></md:Singl'
     'eSignOnService> <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bin'
-    'dings:SOAP" Location="{idp_redirect_url}"></md:SingleSignOnService> <md:SingleSi'
+    'dings:SOAP" Location="{idp_saml_url}"></md:SingleSignOnService> <md:SingleSi'
     'gnOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" Locatio'
-    'n="{idp_redirect_url}"></md:SingleSignOnService> </md:IDPSSODescriptor> </md:Ent'
+    'n="{idp_saml_url}"></md:SingleSignOnService> </md:IDPSSODescriptor> </md:Ent'
     'ityDescriptor>'
 )
-
-MOCK_REDIRECT_INFO = {
-    'headers': {
-        'Location': MOCK_REDIRECT_URL
-    }
-}
 
 MOCK_USER_USERNAME = 'stanley'
 MOCK_USER_EMAIL = 'stanley@stackstorm.com'
@@ -281,7 +277,8 @@ class MockSamlMetadata(object):
             idp_url=MOCK_IDP_URL,
             certificate=MOCK_X509_CERT,
             keyname=MOCK_X509_KEYNAME,
-            idp_redirect_url=MOCK_REDIRECT_URL
+            idp_saml_url=MOCK_IDP_SAML_URL,
+            idp_redirect_url=MOCK_IDP_SAML_URL
         )
 
 
@@ -429,30 +426,36 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
 
 class TestSingleSignOnControllerWithSAML2(BaseSAML2Controller):
 
-    @mock.patch.object(
-        saml.SAML2SingleSignOnBackend,
-        '_handle_verification_error',
-        mock.MagicMock(side_effect=auth_exc.SSOVerificationError('See unit test.')))
-    def test_idp_redirect_bad_referer(self):
-        headers = {'referer': 'https://hahahaha.fooled.ya'}
-        expected_msg = 'Invalid referer -- ' \
-                'it should be either some localhost endpoint or the SSO configured entity'
-        expected_error = {'faultstring': 'Internal Server Error'}
-        response = self.app.get(SSO_REQUEST_V1_PATH, headers=headers, expect_errors=True)
-        self.assertTrue(response.status_code, http_client.INTERNAL_SERVER_ERROR)
-        self.assertDictEqual(response.json, expected_error)
-        self.assertTrue(saml.SAML2SingleSignOnBackend._handle_verification_error.called)
-        saml.SAML2SingleSignOnBackend._handle_verification_error.assert_called_with(expected_msg)
+    def _test_idp_redirect_helper(self, expected_response, headers, status_code, expected_response_type='json'):
+        response = self.app.get(SSO_REQUEST_V1_PATH, headers=headers, expect_errors=True, )
+        self.assertEqual(response.status_code, status_code)
 
-    @mock.patch.object(
-        saml2.client.Saml2Client,
-        'prepare_for_authenticate',
-        mock.MagicMock(return_value=(None, MOCK_REDIRECT_INFO)))
+        if expected_response_type == 'json':
+            self.assertDictEqual(response.json, expected_response)
+        else:
+            self.assertEqual(response.body.decode('utf-8'), expected_response)
+
+        return response
+
+    def test_idp_redirect_bad_referer(self):
+        self._test_idp_redirect_helper(
+            {'faultstring': 'Invalid referer -- '\
+                'it should be either some localhost endpoint or the SSO configured entity'},
+            {'referer': 'https://hahahaha.fooled.ya'},
+            http_client.BAD_REQUEST
+        )
+
     def test_idp_redirect(self):
-        headers = {'referer': MOCK_ENTITY_ID}
-        response = self.app.get(SSO_REQUEST_V1_PATH, headers=headers, expect_errors=False)
-        self.assertTrue(response.status_code, http_client.TEMPORARY_REDIRECT)
-        self.assertEqual(response.location, MOCK_REDIRECT_URL)
+        referer = {'referer': MOCK_ENTITY_ID}
+        response = self._test_idp_redirect_helper(
+            '',
+            referer,
+            http_client.TEMPORARY_REDIRECT,
+            'text'
+        )
+        referer_encoded_json = re.escape(urllib.parse.quote_plus(json.dumps(referer)))
+        # xample response: http://keycloak:8080/realms/stackstorm/protocol/saml?SAMLRequest=nVLLTgIxFP2VSfdjOw9gbGASlBhJUCcwunBjSqdIQ6fF3o6Rv%2FeCgtEFCzdN7sk9r7ZDC4yPu7C2c%2FXWKQjRR2sscIRHpPOWOwEaR9Eq4EHyxfhuxtMLxrfeBSedISdCcp4gAJQP2lkSTScjopuXrLlMe325ivNsIPEoilhkRRMz2c%2BSfLBM896KRE%2FKA7JGBEWQCtCpqYUgbECIpWnMBnGS10nGs4zn%2FWcSTbCGtiIcWOsQtpzSjdpJ48SGF6xg1CthWqCoIjcQnG%2FpsQ4F0WKn6nu80rbR9vV8s%2BXXEvDbuq7i6mFRk2h8bHvtLHSt8gvl37VUj%2FPZKZNxUpi1g0AFPgAFcBQBs8RQpBzihfJDWx%2FdYEIRzofYI7qJV4dVrmzQYUfKv05D%2BiO7t2D8HnnTSeWMlrt%2FGAUvLGi0IxEt9%2Bq%2Ff1P5CQ%3D%3D&RelayState=%7B%22referer%22%3A+%22http%3A%2F%2Flocalhost%22%7D
+        self.assertRegex(response.location, '^' + MOCK_IDP_SAML_URL + r'\?SAMLRequest=\S+&RelayState=' + referer_encoded_json + '$')
 
 
 class TestIdentityProviderCallbackController(BaseSAML2Controller):
