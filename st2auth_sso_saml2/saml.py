@@ -162,10 +162,16 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
         try:
             LOG.debug("Parsing authn response")
-            return saml_client.parse_authn_request_response(
+            authn_response = saml_client.parse_authn_request_response(
                 saml_response,
                 saml2.BINDING_HTTP_POST
             )
+
+            if not authn_response:
+                self._handle_verification_error('Unable to parse the data in SAMLResponse.')
+
+            return authn_response
+
         except saml2.validate.ResponseLifetimeExceed as e:
             LOG.debug("SAML response is too old, error: %s", e)
             self._handle_verification_error("SAML response is too old!")
@@ -189,14 +195,14 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             # restricted to starts with the address of the Sp (or entity id).
             has_relay_state = hasattr(response, 'RelayState')
 
-            if has_relay_state and getattr(response, 'RelayState', None) is None:
-                self._handle_verification_error('The RelayState attribute is null.')
+            if has_relay_state \
+                and (
+                    not isinstance(response.RelayState, list)
+                    or len(response.RelayState) <= 0
+                ):
+                self._handle_verification_error('The RelayState attribute should be a list of one or more strings')
 
-            # The RelayState is an array and it cannot be empty.
-            if has_relay_state and len(getattr(response, 'RelayState')) <= 0:
-                self._handle_verification_error('The RelayState attribute is empty.')
-
-            relay_state = json.loads(getattr(response, 'RelayState')[0]) if has_relay_state else {}
+            relay_state = json.loads(response.RelayState[0]) if has_relay_state else {}
             LOG.debug("Incoming relay state is [%s]", relay_state)
 
             if has_relay_state:
@@ -207,9 +213,6 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                         ' It must come from the trusted SAML entity', relay_state['referer'])
 
             authn_response = self._get_authn_response_from_response(response)
-
-            if not authn_response:
-                self._handle_verification_error('Unable to parse the data in SAMLResponse.')
 
             LOG.debug("Validating expected fields are present: %s",
                 self.MANDATORY_SAML_RESPONSE_ATTRIBUTES)
