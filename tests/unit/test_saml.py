@@ -32,8 +32,10 @@ from six.moves import http_client
 import st2auth
 from st2auth import sso as st2auth_sso
 from st2auth import app
+from st2auth.sso.base import BaseSingleSignOnBackendResponse
 from st2auth_sso_saml2 import saml
 from st2common.exceptions import auth as auth_exc
+from st2common.router import GenericRequestParam
 from st2tests import config
 from st2tests import DbTestCase
 from st2tests.api import TestApp
@@ -89,6 +91,21 @@ class BaseSAML2Controller(DbTestCase):
     default_sso_backend_kwargs = {'metadata_url': MOCK_METADATA_URL, 'entity_id': MOCK_ENTITY_ID}
     backend_instance = None
 
+    old_get_saml_client = None
+
+    # Wraps the appropriate method to ignore old saml responses
+    def _ignore_old_saml_response_setup(self):
+        old = self.old_get_saml_client = saml.SAML2SingleSignOnBackend._get_saml_client
+        def wrapper(self):
+            client = old(self)
+            client.config.accepted_time_diff = 10000000
+            return client
+        saml.SAML2SingleSignOnBackend._get_saml_client = wrapper
+
+    # Restore the default get_saml_client method to not ignore old saml reponses any longer :o
+    def _ignore_old_saml_response_teardown(self):
+        saml.SAML2SingleSignOnBackend._get_saml_client = self.old_get_saml_client
+
     @classmethod
     @mock.patch.object(
         requests,
@@ -105,9 +122,9 @@ class BaseSAML2Controller(DbTestCase):
 
         # Delay import here otherwise setupClass will not have run.
         from st2auth.controllers.v1 import sso as sso_api_controller
-        instance = sso_api_controller.SSO_BACKEND = st2auth_sso.get_sso_backend()
+        cls.backend_instance = sso_api_controller.SSO_BACKEND = st2auth_sso.get_sso_backend()
 
-        return instance
+        return cls.backend_instance
 
 
     @classmethod
@@ -115,12 +132,12 @@ class BaseSAML2Controller(DbTestCase):
         super(BaseSAML2Controller, cls).setUpClass()
 
         if cls.automatically_setup_backend:
-            cls.backend_instance = BaseSAML2Controller.setupBackendConfig(
+            BaseSAML2Controller.setupBackendConfig(
                 cls.default_sso_backend_kwargs, **kwargs)
 
 
 # Tests for initialization
-class TestSAMLSSOBackend(BaseSAML2Controller):
+class TestSAMLSSOBackendInitialization(BaseSAML2Controller):
 
     automatically_setup_backend = False
 
@@ -213,6 +230,83 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
             {'metadata_url': MOCK_METADATA_URL, 'entity_id': MOCK_ENTITY_ID, 'invalid': 123}
         )
         
+# Tests for SAML backend functionality
+class TestSAMLSSOBackend(BaseSAML2Controller):
+
+    automatically_setup_backend = False
+
+    # Standard logic for these verify_response tests
+    def _test_verify_response_helper(self, 
+        backend_config=BaseSAML2Controller.default_sso_backend_kwargs,
+        saml_response=MOCK_SAML_RESPONSE,
+        relay_state=[json.dumps({'referer': MOCK_ENTITY_ID})],
+        role_mapping=None,
+        expected_result=None
+        ):
+        self._ignore_old_saml_response_setup()
+
+        if role_mapping:
+            backend_config = {**backend_config, **{
+                'role_mapping': role_mapping
+            }}
+
+        self.setupBackendConfig(backend_config)
+
+        response = self.backend_instance.verify_response(GenericRequestParam(
+            SAMLResponse= [saml_response],
+            RelayState=relay_state
+        ))
+        self.assertEqual(response, expected_result)
+        
+        self._ignore_old_saml_response_teardown()
+        return response
+
+    def test_verify_response(self):
+        self._test_verify_response_helper(
+            expected_result=BaseSingleSignOnBackendResponse(
+                username='guilherme.pim',
+                referer=MOCK_ENTITY_ID,
+                roles=[]
+            )
+        )
+
+    def test_verify_response_with_roles_empty(self):
+        self._test_verify_response_helper(
+            role_mapping={
+                'test': ['observer', 'admin']
+            },
+            expected_result=BaseSingleSignOnBackendResponse(
+                username='guilherme.pim',
+                referer=MOCK_ENTITY_ID,
+                roles=[]
+            )
+        )
+
+    def test_verify_response_with_roles_one_match(self):
+        self._test_verify_response_helper(
+            role_mapping={
+                'default-roles-stackstorm': ['observer', 'admin']
+            },
+            expected_result=BaseSingleSignOnBackendResponse(
+                username='guilherme.pim',
+                referer=MOCK_ENTITY_ID,
+                roles=['admin', 'observer']
+            )
+        )
+
+    def test_verify_response_with_roles_multiple_match(self):
+        self._test_verify_response_helper(
+            role_mapping={
+                'default-roles-stackstorm': ['observer', 'admin'],
+                'view-profile': ['extra'],
+                'no-match': ['other-group']
+            },
+            expected_result=BaseSingleSignOnBackendResponse(
+                username='guilherme.pim',
+                referer=MOCK_ENTITY_ID,
+                roles=['admin', 'extra','observer']
+            )
+        )
 
 class TestSingleSignOnControllerWithSAML2(BaseSAML2Controller):
 
@@ -266,13 +360,7 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
 
     # Helper method for triggering a processing of a valid SAML Response (the one from the mock :)
     def _test_idp_callback_valid_response_helper(self, expected_response, relay_state, status_code, expected_response_type='json'):
-        # Making sure we ignore old responses :)
-        old = saml.SAML2SingleSignOnBackend._get_saml_client
-        def wrapper(self):
-            client = old(self)
-            client.config.accepted_time_diff = 10000000
-            return client
-        saml.SAML2SingleSignOnBackend._get_saml_client = wrapper
+        self._ignore_old_saml_response_setup()
         # Create a request in the database for flow to proceed properly :)
         create_web_sso_request(self.saml_response_request_id)
 
@@ -282,8 +370,7 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
             status_code,
             expected_response_type
         )
-
-        saml.SAML2SingleSignOnBackend._get_saml_client = old
+        self._ignore_old_saml_response_teardown()
 
 
     def test_idp_callback_missing_response(self):

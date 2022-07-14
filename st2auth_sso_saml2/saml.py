@@ -180,7 +180,9 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         granted_roles = []
         for sso_role in sso_roles:
             granted_roles += self.role_mapping.get(sso_role, [])
-        return list(set(granted_roles))
+        granted_roles = list(set(granted_roles))
+        granted_roles.sort()
+        return granted_roles
 
     def get_request_id_from_response(self, response):
         authn_response = self._get_authn_response_from_response(response)
@@ -223,10 +225,10 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                         in the SAML response!', field)
 
             # Base verified user to be returned
-            verified_user = {
-                'referer': relay_state.get('referer') or self.entity_id,
-                'username': self._get_single_saml_attribute_or_none(authn_response, 'Username')
-            }
+            verified_user = st2auth_sso.BaseSingleSignOnBackendResponse(
+                username=self._get_single_saml_attribute_or_none(authn_response, 'Username'),
+                referer=relay_state.get('referer') or self.entity_id,
+            )
 
             # Role mapping :)
             if hasattr(self, 'role_mapping') and self.role_mapping:
@@ -234,7 +236,7 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                 roles = self._map_roles(sso_roles)
 
                 LOG.debug("Roles received from SSO [%s] are mapped to: %s", sso_roles, roles)
-                verified_user['roles'] = roles
+                verified_user.roles = roles
             else:
                 LOG.debug("Role mapping disabled, so not mapping incoming roles!")
 
