@@ -57,6 +57,15 @@ MOCK_METADATA_URL = "%s/protocol/saml/descriptor" % MOCK_IDP_URL
 
 MOCK_SAML_RESPONSE_REQUEST_ID = "id_38c65e6f-124c-451f-8ff8-407e1799818e"
 MOCK_SAML_RESPONSE = load_fixture("saml_response_valid_with_roles.txt")
+MOCK_GROUPS = [
+    "uma_authorization",
+    "manage-account-links",
+    "offline_access",
+    "manage-account",
+    "view-profile",
+    "default-roles-stackstorm",
+]
+MOCK_GROUPS.sort()
 
 MOCK_SAML_METADATA_TEXT = load_fixture("saml_metadata.xml")
 
@@ -275,51 +284,9 @@ class TestSAMLSSOBackendInitialization(BaseSAML2Controller):
             },
         )
 
-    def test_cls_init_no_roles(self):
+    def test_cls_init_basic(self):
         self._test_cls_init_default_assertions(
             {"metadata_url": MOCK_METADATA_URL, "entity_id": MOCK_ENTITY_ID}
-        )
-
-    def test_cls_init_valid_roles(self):
-        self._test_cls_init_default_assertions(
-            {
-                "metadata_url": MOCK_METADATA_URL,
-                "entity_id": MOCK_ENTITY_ID,
-                "role_mapping": {"test_role": ["test", "123"]},
-            }
-        )
-
-    def test_cls_init_invalid_roles_spec_list_of_number(self):
-        self.assertRaisesRegex(
-            TypeError,
-            (
-                "invalid 'role_mapping' parameter - it is supposed to be"
-                r" a dict\[str, list\[str\]\] object or None!"
-            ),
-            self.setupBackendConfig,
-            {
-                "metadata_url": MOCK_METADATA_URL,
-                "entity_id": MOCK_ENTITY_ID,
-                "role_mapping": {
-                    "test_role1": ["123", "role2"],
-                    "test_role": [123, 333],
-                },
-            },
-        )
-
-    def test_cls_init_invalid_roles_spec_string(self):
-        self.assertRaisesRegex(
-            TypeError,
-            (
-                "invalid 'role_mapping' parameter - it is supposed to be"
-                r" a dict\[str, list\[str\]\] object or None!"
-            ),
-            self.setupBackendConfig,
-            {
-                "metadata_url": MOCK_METADATA_URL,
-                "entity_id": MOCK_ENTITY_ID,
-                "role_mapping": {"test_role": "test"},
-            },
         )
 
     def test_cls_init_missing_args(self):
@@ -354,13 +321,9 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
         backend_config=BaseSAML2Controller.default_sso_backend_kwargs,
         saml_response=MOCK_SAML_RESPONSE,
         relay_state=[json.dumps({"referer": MOCK_ENTITY_ID})],
-        role_mapping=None,
         expected_result=None,
     ):
         self._ignore_old_saml_response_setup()
-
-        if role_mapping:
-            backend_config = {**backend_config, **{"role_mapping": role_mapping}}
 
         self.setupBackendConfig(backend_config)
 
@@ -375,39 +338,16 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
     def test_verify_response(self):
         self._test_verify_response_helper(
             expected_result=BaseSingleSignOnBackendResponse(
-                username="guilherme.pim", referer=MOCK_ENTITY_ID, roles=[]
+                username="guilherme.pim", referer=MOCK_ENTITY_ID, groups=MOCK_GROUPS
             )
         )
 
-    def test_verify_response_with_roles_empty(self):
+    def test_verify_response_with_groups_multiple_match(self):
         self._test_verify_response_helper(
-            role_mapping={"test": ["observer", "admin"]},
-            expected_result=BaseSingleSignOnBackendResponse(
-                username="guilherme.pim", referer=MOCK_ENTITY_ID, roles=[]
-            ),
-        )
-
-    def test_verify_response_with_roles_one_match(self):
-        self._test_verify_response_helper(
-            role_mapping={"default-roles-stackstorm": ["observer", "admin"]},
             expected_result=BaseSingleSignOnBackendResponse(
                 username="guilherme.pim",
                 referer=MOCK_ENTITY_ID,
-                roles=["admin", "observer"],
-            ),
-        )
-
-    def test_verify_response_with_roles_multiple_match(self):
-        self._test_verify_response_helper(
-            role_mapping={
-                "default-roles-stackstorm": ["observer", "admin"],
-                "view-profile": ["extra"],
-                "no-match": ["other-group"],
-            },
-            expected_result=BaseSingleSignOnBackendResponse(
-                username="guilherme.pim",
-                referer=MOCK_ENTITY_ID,
-                roles=["admin", "extra", "observer"],
+                groups=MOCK_GROUPS,
             ),
         )
 

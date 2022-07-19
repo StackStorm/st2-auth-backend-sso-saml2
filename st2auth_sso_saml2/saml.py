@@ -39,27 +39,10 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
     MANDATORY_SAML_RESPONSE_ATTRIBUTES = ["Username"]
 
-    def _is_valid_role_mapping(self, role_mapping):
-        # Supposed to be a dict!
-        if not isinstance(role_mapping, dict):
-            return False
-        # Each entry has to be a list[str]
-        for k, v in role_mapping.items():
-            # k = str
-            # v = list
-            if not isinstance(k, str) or not isinstance(v, list):
-                return False
-            # v is ssupposed to be a list[str]
-            for r in v:
-                if not isinstance(r, str):
-                    return False
-        return True
-
     def __init__(
         self,
         entity_id,
         metadata_url,
-        role_mapping=None,
         extra_pysaml2_sp_settings={},
         extra_pysaml2_client_settings={},
         debug=False,
@@ -90,17 +73,6 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                 raise TypeError(
                     "extra_pysaml2_client_settings should be provided as a dictt!"
                 )
-
-        if role_mapping:
-            LOG.debug("Validating role mapping configuration")
-            if not self._is_valid_role_mapping(role_mapping):
-                raise TypeError(
-                    "invalid 'role_mapping' parameter - "
-                    "it is supposed to be a dict[str, list[str]] object or None!"
-                )
-
-            self.role_mapping = role_mapping
-            LOG.info("Role mapping configuration: %s", role_mapping)
 
         LOG.debug(
             'METADATA GET FROM "%s": %s'
@@ -216,14 +188,6 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             LOG.debug("SAML response is too old, error: %s", e)
             self._handle_verification_error("SAML response is too old!")
 
-    def _map_roles(self, sso_roles):
-        granted_roles = []
-        for sso_role in sso_roles:
-            granted_roles += self.role_mapping.get(sso_role, [])
-        granted_roles = list(set(granted_roles))
-        granted_roles.sort()
-        return granted_roles
-
     def get_request_id_from_response(self, response):
         authn_response = self._get_authn_response_from_response(response)
         return getattr(authn_response, "in_response_to", None)
@@ -287,18 +251,14 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
             )
 
             # Role mapping :)
-            if hasattr(self, "role_mapping") and self.role_mapping:
-                sso_roles = self._get_saml_attribute_list_or_empty(
-                    authn_response, "Role"
-                )
-                roles = self._map_roles(sso_roles)
-
+            sso_roles = self._get_saml_attribute_list_or_empty(authn_response, "Role")
+            if sso_roles:
+                sso_roles.sort()
                 LOG.debug(
-                    "Roles received from SSO [%s] are mapped to: %s", sso_roles, roles
+                    "Roles received from SSO [%s] will be sent back as groups",
+                    sso_roles,
                 )
-                verified_user.roles = roles
-            else:
-                LOG.debug("Role mapping disabled, so not mapping incoming roles!")
+                verified_user.groups = sso_roles
 
             return verified_user
 
