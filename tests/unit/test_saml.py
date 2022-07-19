@@ -347,7 +347,7 @@ class TestSingleSignOnControllerWithSAML2(BaseSAML2Controller):
             "", referer, http_client.TEMPORARY_REDIRECT, "text"
         )
         referer_encoded_json = re.escape(urllib.parse.quote_plus(json.dumps(referer)))
-        # xample response: http://keycloak:8080/realms/stackstorm/protocol/saml?SAMLRequest=nVLLTgIxFP2VSfdjOw9gbGASlBhJUCcwunBjSqdIQ6fF3o6Rv%2FeCgtEFCzdN7sk9r7ZDC4yPu7C2c%2FXWKQjRR2sscIRHpPOWOwEaR9Eq4EHyxfhuxtMLxrfeBSedISdCcp4gAJQP2lkSTScjopuXrLlMe325ivNsIPEoilhkRRMz2c%2BSfLBM896KRE%2FKA7JGBEWQCtCpqYUgbECIpWnMBnGS10nGs4zn%2FWcSTbCGtiIcWOsQtpzSjdpJ48SGF6xg1CthWqCoIjcQnG%2FpsQ4F0WKn6nu80rbR9vV8s%2BXXEvDbuq7i6mFRk2h8bHvtLHSt8gvl37VUj%2FPZKZNxUpi1g0AFPgAFcBQBs8RQpBzihfJDWx%2FdYEIRzofYI7qJV4dVrmzQYUfKv05D%2BiO7t2D8HnnTSeWMlrt%2FGAUvLGi0IxEt9%2Bq%2Ff1P5CQ%3D%3D&RelayState=%7B%22referer%22%3A+%22http%3A%2F%2Flocalhost%22%7D
+        # noqa: xample response: http://keycloak:8080/realms/stackstorm/protocol/saml?SAMLRequest=nVLLTgIxFP2VSfdjOw9gbGASlBhJUCcwunBjSqdIQ6fF3o6Rv%2FeCgtEFCzdN7sk9r7ZDC4yPu7C2c%2FXWKQjRR2sscIRHpPOWOwEaR9Eq4EHyxfhuxtMLxrfeBSedISdCcp4gAJQP2lkSTScjopuXrLlMe325ivNsIPEoilhkRRMz2c%2BSfLBM896KRE%2FKA7JGBEWQCtCpqYUgbECIpWnMBnGS10nGs4zn%2FWcSTbCGtiIcWOsQtpzSjdpJ48SGF6xg1CthWqCoIjcQnG%2FpsQ4F0WKn6nu80rbR9vV8s%2BXXEvDbuq7i6mFRk2h8bHvtLHSt8gvl37VUj%2FPZKZNxUpi1g0AFPgAFcBQBs8RQpBzihfJDWx%2FdYEIRzofYI7qJV4dVrmzQYUfKv05D%2BiO7t2D8HnnTSeWMlrt%2FGAUvLGi0IxEt9%2Bq%2Ff1P5CQ%3D%3D&RelayState=%7B%22referer%22%3A+%22http%3A%2F%2Flocalhost%22%7D
         self.assertRegex(
             response.location,
             "^"
@@ -492,7 +492,8 @@ class TestIdentityProviderCallbackController(BaseSAML2Controller):
     def test_idp_callback_relay_state_bad_referer(self):
         self._test_idp_callback_valid_response_helper(
             {
-                "faultstring": "The RelayState referer [https://foobar] is not allowed. It must come from the trusted SAML entity"
+                "faultstring": "The RelayState referer [https://foobar] is not allowed. It must"
+                " come from the trusted SAML entity"
             },
             [json.dumps({"referer": "https://foobar"})],
             http_client.BAD_REQUEST,
