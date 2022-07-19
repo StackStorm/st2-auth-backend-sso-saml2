@@ -55,11 +55,41 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                     return False
         return True
 
-    def __init__(self, entity_id, metadata_url, role_mapping=None, debug=False):
+    def __init__(
+        self,
+        entity_id,
+        metadata_url,
+        role_mapping=None,
+        extra_pysaml2_sp_settings={},
+        extra_pysaml2_client_settings={},
+        debug=False,
+    ):
         self.entity_id = entity_id
         self.https_acs_url = "%s/auth/sso/callback" % self.entity_id
         self.saml_metadata_url = metadata_url
         self.saml_metadata = requests.get(self.saml_metadata_url)
+
+        # Extra configuration for the service provider of the pysaml2 library
+        if extra_pysaml2_sp_settings is not None:
+            LOG.info(
+                "Using configured extra pysaml2 service provider parameters"
+                "(extra_pysaml2_sp_settings)!"
+            )
+            if not isinstance(extra_pysaml2_sp_settings, dict):
+                raise TypeError(
+                    "extra_pysaml2_sp_settings should be provided as a dictt!"
+                )
+
+        # Extra configuration for the client config of the pysaml2 library
+        if extra_pysaml2_client_settings is not None:
+            LOG.info(
+                "Using configured extra pysaml2 client parameters"
+                "(extra_pysaml2_client_settings)!"
+            )
+            if not isinstance(extra_pysaml2_client_settings, dict):
+                raise TypeError(
+                    "extra_pysaml2_client_settings should be provided as a dictt!"
+                )
 
         if role_mapping:
             LOG.debug("Validating role mapping configuration")
@@ -97,8 +127,10 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                     "logout_requests_signed": True,
                     "want_assertions_signed": True,
                     "want_response_signed": True,
+                    **extra_pysaml2_sp_settings,
                 }
             },
+            **extra_pysaml2_client_settings,
         }
 
         if debug:

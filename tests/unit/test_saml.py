@@ -146,34 +146,133 @@ class TestSAMLSSOBackendInitialization(BaseSAML2Controller):
 
     automatically_setup_backend = False
 
-    def _test_cls_init_default_assertions(self, backend_config):
+    def _test_cls_init_default_assertions(
+        self, backend_config, expected_saml_client_settings=None
+    ):
         instance = self.setupBackendConfig(backend_config)
         self.assertEqual(instance.entity_id, MOCK_ENTITY_ID)
         self.assertEqual(instance.https_acs_url, MOCK_ACS_URL)
         self.assertEqual(instance.saml_metadata_url, MOCK_METADATA_URL)
 
-        expected_saml_client_settings = {
-            "entityid": MOCK_ENTITY_ID,
-            "metadata": {"inline": [MockSamlMetadata().text]},
-            "service": {
-                "sp": {
-                    "endpoints": {
-                        "assertion_consumer_service": [
-                            (MOCK_ACS_URL, saml2.BINDING_HTTP_REDIRECT),
-                            (MOCK_ACS_URL, saml2.BINDING_HTTP_POST),
-                        ]
-                    },
-                    "allow_unsolicited": True,
-                    "authn_requests_signed": False,
-                    "logout_requests_signed": True,
-                    "want_assertions_signed": True,
-                    "want_response_signed": True,
-                }
-            },
-        }
+        if expected_saml_client_settings is None:
+            expected_saml_client_settings = {
+                "entityid": MOCK_ENTITY_ID,
+                "metadata": {"inline": [MockSamlMetadata().text]},
+                "service": {
+                    "sp": {
+                        "endpoints": {
+                            "assertion_consumer_service": [
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_REDIRECT),
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_POST),
+                            ]
+                        },
+                        "allow_unsolicited": True,
+                        "authn_requests_signed": False,
+                        "logout_requests_signed": True,
+                        "want_assertions_signed": True,
+                        "want_response_signed": True,
+                    }
+                },
+            }
 
         self.assertDictEqual(
             instance.saml_client_settings, expected_saml_client_settings
+        )
+
+    def test_cls_init_extra_pysaml2_sp_settings(self):
+        self._test_cls_init_default_assertions(
+            {
+                "metadata_url": MOCK_METADATA_URL,
+                "entity_id": MOCK_ENTITY_ID,
+                "extra_pysaml2_sp_settings": {
+                    "test_setting": "aaa",
+                    "want_assertions_signed": False,
+                },
+            },
+            {
+                "entityid": MOCK_ENTITY_ID,
+                "metadata": {"inline": [MockSamlMetadata().text]},
+                "service": {
+                    "sp": {
+                        "endpoints": {
+                            "assertion_consumer_service": [
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_REDIRECT),
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_POST),
+                            ]
+                        },
+                        "allow_unsolicited": True,
+                        "authn_requests_signed": False,
+                        "logout_requests_signed": True,
+                        "want_assertions_signed": False,
+                        "want_response_signed": True,
+                        "test_setting": "aaa",
+                    }
+                },
+            },
+        )
+
+    def test_cls_init_extra_pysaml2_client_setting(self):
+        self._test_cls_init_default_assertions(
+            {
+                "metadata_url": MOCK_METADATA_URL,
+                "entity_id": MOCK_ENTITY_ID,
+                "extra_pysaml2_client_settings": {"test_setting_2": "aaa"},
+            },
+            {
+                "entityid": MOCK_ENTITY_ID,
+                "metadata": {"inline": [MockSamlMetadata().text]},
+                "service": {
+                    "sp": {
+                        "endpoints": {
+                            "assertion_consumer_service": [
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_REDIRECT),
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_POST),
+                            ]
+                        },
+                        "allow_unsolicited": True,
+                        "authn_requests_signed": False,
+                        "logout_requests_signed": True,
+                        "want_assertions_signed": True,
+                        "want_response_signed": True,
+                    }
+                },
+                "test_setting_2": "aaa",
+            },
+        )
+
+    def test_cls_init_both_extra_pysaml2_settings(self):
+        self._test_cls_init_default_assertions(
+            {
+                "metadata_url": MOCK_METADATA_URL,
+                "entity_id": MOCK_ENTITY_ID,
+                "extra_pysaml2_client_settings": {"test_setting_2": "aaa"},
+                "extra_pysaml2_sp_settings": {
+                    "test_setting_sp": "aaa",
+                    "test_setting_sp2": "bbbb",
+                },
+            },
+            {
+                "entityid": MOCK_ENTITY_ID,
+                "metadata": {"inline": [MockSamlMetadata().text]},
+                "service": {
+                    "sp": {
+                        "endpoints": {
+                            "assertion_consumer_service": [
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_REDIRECT),
+                                (MOCK_ACS_URL, saml2.BINDING_HTTP_POST),
+                            ]
+                        },
+                        "allow_unsolicited": True,
+                        "authn_requests_signed": False,
+                        "logout_requests_signed": True,
+                        "want_assertions_signed": True,
+                        "want_response_signed": True,
+                        "test_setting_sp": "aaa",
+                        "test_setting_sp2": "bbbb",
+                    }
+                },
+                "test_setting_2": "aaa",
+            },
         )
 
     def test_cls_init_no_roles(self):
