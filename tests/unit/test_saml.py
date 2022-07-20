@@ -21,7 +21,7 @@ import urllib
 import re
 
 import os
-
+from st2auth_sso_saml2.saml import SAML2SingleSignOnBackend
 import requests
 
 from oslo_config import cfg
@@ -32,11 +32,15 @@ from st2auth import sso as st2auth_sso
 from st2auth import app
 from st2auth.sso.base import BaseSingleSignOnBackendResponse
 from st2auth_sso_saml2 import saml
+from st2common.exceptions.auth import SSOVerificationError
 from st2common.router import GenericRequestParam
 from st2tests import config
 from st2tests import DbTestCase
 from st2tests.api import TestApp
 from st2common.services.access import create_web_sso_request
+
+# Delay import here otherwise setupClass will not have run.
+from st2auth.controllers.v1 import sso as sso_api_controller
 
 
 # Lods a fixture file from within the fixtures/ directory :)
@@ -130,9 +134,6 @@ class BaseSAML2Controller(DbTestCase):
         )
 
         cls.app = TestApp(app.setup_app(), **kwargs)
-
-        # Delay import here otherwise setupClass will not have run.
-        from st2auth.controllers.v1 import sso as sso_api_controller
 
         cls.backend_instance = (
             sso_api_controller.SSO_BACKEND
@@ -334,6 +335,15 @@ class TestSAMLSSOBackend(BaseSAML2Controller):
 
         self._ignore_old_saml_response_teardown()
         return response
+
+    @mock.patch.object(
+        SAML2SingleSignOnBackend,
+        "_get_authn_response_from_response",
+        mock.MagicMock(side_effect=Exception("foobar")),
+    )
+    def test_verify_response_unknown_exception(self):
+        with self.assertRaises(SSOVerificationError):
+            self._test_verify_response_helper(expected_result=None)
 
     def test_verify_response(self):
         self._test_verify_response_helper(
