@@ -43,8 +43,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
         self,
         entity_id,
         metadata_url,
-        extra_pysaml2_sp_settings={},
-        extra_pysaml2_client_settings={},
+        extra_pysaml2_sp_settings=None,
+        extra_pysaml2_client_settings=None,
         debug=False,
     ):
         self.entity_id = entity_id
@@ -62,6 +62,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                 raise TypeError(
                     "extra_pysaml2_sp_settings should be provided as a dictt!"
                 )
+        else:
+            extra_pysaml2_sp_settings = {}
 
         # Extra configuration for the client config of the pysaml2 library
         if extra_pysaml2_client_settings is not None:
@@ -73,6 +75,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                 raise TypeError(
                     "extra_pysaml2_client_settings should be provided as a dictt!"
                 )
+        else:
+            extra_pysaml2_client_settings = {}
 
         LOG.debug(
             'METADATA GET FROM "%s": %s'
