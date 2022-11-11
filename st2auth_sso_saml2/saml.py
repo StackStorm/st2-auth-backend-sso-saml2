@@ -241,8 +241,8 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
                     is None
                 ):
                     self._handle_verification_error(
-                        'Expected field "%s" to be present \
-                        in the SAML response!',
+                        'Expected field "%s" to be present '
+                        "in the SAML response! (with no namespace)",
                         field,
                     )
 
