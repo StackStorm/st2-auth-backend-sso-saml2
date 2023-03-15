@@ -25,7 +25,8 @@ jobs:
       - run:
           name: Download and install dependencies
           command: |
-            sudo apt-get -y install xmlsec1 libldap2-dev
+            sudo apt-get update && sudo apt-get -y install xmlsec1 libldap2-dev  \
+              libsasl2-dev slapd ldap-utils tox lcov valgrind
             make requirements
       - run:
           name: Run lint and tests (Python 3.6)
