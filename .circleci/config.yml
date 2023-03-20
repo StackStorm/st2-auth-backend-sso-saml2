@@ -44,17 +44,6 @@ workflows:
   build_test_deploy_on_push:
     jobs:
       - build_and_test_python36
-      - build_packages
-      - deploy_packages:
-          requires:
-            - build_and_test_python36
-            - build_packages
-          filters:
-            branches:
-              only:
-                - master
-                - /v[0-9]+\.[0-9]+/
-                - feature/circleci
   build_test_nightly:
     jobs:
       - build_and_test_python36
