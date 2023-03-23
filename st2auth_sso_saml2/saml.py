@@ -14,22 +14,20 @@
 
 from __future__ import absolute_import
 
+
 import json
 import requests
 import saml2
 import saml2.client
 import saml2.config
 import six
-import uuid
 
 from st2auth.sso import base as st2auth_sso
 from st2common import log as logging
 from st2common.exceptions import auth as auth_exc
 
 
-__all__ = [
-    'SAML2SingleSignOnBackend'
-]
+__all__ = ["SAML2SingleSignOnBackend"]
 
 LOG = logging.getLogger(__name__)
 
@@ -39,46 +37,88 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
     SAML2 SSO authentication backend.
     """
 
-    def __init__(self, entity_id, metadata_url, debug=False):
+    MANDATORY_SAML_RESPONSE_ATTRIBUTES = ["Username"]
+
+    def __init__(
+        self,
+        entity_id,
+        metadata_url,
+        extra_pysaml2_sp_settings=None,
+        extra_pysaml2_client_settings=None,
+        debug=False,
+    ):
         self.entity_id = entity_id
-        self.relay_state_id = uuid.uuid4().hex
-        self.https_acs_url = '%s/auth/sso/callback' % self.entity_id
+        self.https_acs_url = "%s/auth/sso/callback" % self.entity_id
         self.saml_metadata_url = metadata_url
         self.saml_metadata = requests.get(self.saml_metadata_url)
 
-        LOG.debug('METADATA GET FROM "%s": %s' % (self.saml_metadata_url, self.saml_metadata.text))
+        # Extra configuration for the service provider of the pysaml2 library
+        if extra_pysaml2_sp_settings is not None:
+            LOG.info(
+                "Using configured extra pysaml2 service provider parameters"
+                "(extra_pysaml2_sp_settings)!"
+            )
+            if not isinstance(extra_pysaml2_sp_settings, dict):
+                raise TypeError(
+                    "extra_pysaml2_sp_settings should be provided as a dictt!"
+                )
+        else:
+            extra_pysaml2_sp_settings = {}
+
+        # Extra configuration for the client config of the pysaml2 library
+        if extra_pysaml2_client_settings is not None:
+            LOG.info(
+                "Using configured extra pysaml2 client parameters"
+                "(extra_pysaml2_client_settings)!"
+            )
+            if not isinstance(extra_pysaml2_client_settings, dict):
+                raise TypeError(
+                    "extra_pysaml2_client_settings should be provided as a dictt!"
+                )
+        else:
+            extra_pysaml2_client_settings = {}
+
+        LOG.debug(
+            'METADATA GET FROM "%s": %s'
+            % (self.saml_metadata_url, self.saml_metadata.text)
+        )
 
         self.saml_client_settings = {
-            'entityid': self.entity_id,
-            'metadata': {
-                'inline': [self.saml_metadata.text]
-            },
-            'service': {
-                'sp': {
-                    'endpoints': {
-                        'assertion_consumer_service': [
+            "entityid": self.entity_id,
+            "metadata": {"inline": [self.saml_metadata.text]},
+            "service": {
+                "sp": {
+                    "endpoints": {
+                        "assertion_consumer_service": [
                             (self.https_acs_url, saml2.BINDING_HTTP_REDIRECT),
-                            (self.https_acs_url, saml2.BINDING_HTTP_POST)
+                            (self.https_acs_url, saml2.BINDING_HTTP_POST),
                         ],
                     },
                     # Don't verify that the incoming requests originate from us via
                     # the built-in cache for authn request ids in pysaml2
-                    'allow_unsolicited': True,
+                    "allow_unsolicited": True,
                     # Don't sign authn requests, since signed requests only make
                     # sense in a situation where you control both the SP and IdP
-                    'authn_requests_signed': False,
-                    'logout_requests_signed': True,
-                    'want_assertions_signed': True,
-                    'want_response_signed': True
+                    "authn_requests_signed": False,
+                    "logout_requests_signed": True,
+                    "want_assertions_signed": True,
+                    "want_response_signed": True,
+                    **extra_pysaml2_sp_settings,
                 }
-            }
+            },
+            **extra_pysaml2_client_settings,
         }
 
         if debug:
-            self.saml_client_settings['debug'] = 1
+            self.saml_client_settings["debug"] = 1
 
-    def _get_relay_state_id(self):
-        return self.relay_state_id
+    def _get_single_saml_attribute_or_none(self, authn_response, field):
+        if field in authn_response.ava and len(authn_response.ava[field]) > 0:
+            return str(authn_response.ava[field][0])
+        return None
+
+    def _get_saml_attribute_list_or_empty(self, authn_response, field):
+        return authn_response.ava[field] if field in authn_response.ava else []
 
     def _get_saml_client(self):
         saml_config = saml2.config.Config()
@@ -87,85 +127,149 @@ class SAML2SingleSignOnBackend(st2auth_sso.BaseSingleSignOnBackend):
 
         return saml2.client.Saml2Client(config=saml_config)
 
-    def _handle_verification_error(self, error_message):
-        raise auth_exc.SSOVerificationError(error_message)
+    def _handle_verification_error(self, error_message, *args):
+        raise ValueError(error_message % args)
 
-    def get_request_redirect_url(self, referer):
-        if not referer.startswith(self.entity_id):
-            self._handle_verification_error('Invalid referer.')
+    def get_request_redirect_url(self, id, referer):
+        if not referer.startswith(self.entity_id) and not referer.startswith(
+            "http://localhost:"
+        ):
+            self._handle_verification_error(
+                "Invalid referer -- "
+                "it should be either some localhost endpoint or the SSO configured entity"
+            )
 
-        # The relay state will be echo back from the Idp. This adds another layer of
-        # verification to ensure the unique value passed during the request step is
-        # the same value passed back during the response step. We will also use
-        # the referer value to redirect user back to the original page.
-        relay_state = {
-            'id': self.relay_state_id,
-            'referer': referer
-        }
+        relay_state = {"referer": referer}
 
         saml_client = self._get_saml_client()
-        reqid, info = saml_client.prepare_for_authenticate(relay_state=json.dumps(relay_state))
+        reqid, info = saml_client.prepare_for_authenticate(
+            relay_state=json.dumps(relay_state), message_id=id
+        )
 
         # Get the IdP URL to send the SAML request to.
-        redirect_url = [v for k, v in six.iteritems(dict(info['headers'])) if k == 'Location'][0]
+        redirect_url = [
+            v for k, v in six.iteritems(dict(info["headers"])) if k == "Location"
+        ][0]
 
         return redirect_url
 
+    def _get_authn_response_from_response(self, response):
+        if not hasattr(response, "SAMLResponse"):
+            self._handle_verification_error("The SAMLResponse attribute is missing.")
+
+        if getattr(response, "SAMLResponse", None) is None:
+            self._handle_verification_error("The SAMLResponse attribute is null.")
+
+        # The SAMLResponse is an array and it cannot be empty.
+        if (
+            not isinstance(getattr(response, "SAMLResponse"), list)
+            or len(getattr(response, "SAMLResponse")) == 0
+            or not isinstance(getattr(response, "SAMLResponse")[0], str)
+        ):
+            self._handle_verification_error(
+                "The SAMLResponse attribute should be a list of one or more strings"
+            )
+
+        # Parse the response and verify signature.
+        saml_response = getattr(response, "SAMLResponse")[0]
+
+        saml_client = self._get_saml_client()
+
+        try:
+            LOG.debug("Parsing authn response")
+            authn_response = saml_client.parse_authn_request_response(
+                saml_response, saml2.BINDING_HTTP_POST
+            )
+
+            if not authn_response:
+                self._handle_verification_error(
+                    "Unable to parse the data in SAMLResponse."
+                )
+
+            return authn_response
+
+        except saml2.validate.ResponseLifetimeExceed as e:
+            LOG.debug("SAML response is too old, error: %s", e)
+            self._handle_verification_error("SAML response is too old!")
+
+    def get_request_id_from_response(self, response):
+        authn_response = self._get_authn_response_from_response(response)
+        return getattr(authn_response, "in_response_to", None)
+
     def verify_response(self, response):
         try:
-            if not hasattr(response, 'SAMLResponse'):
-                self._handle_verification_error('The SAMLResponse attribute is missing.')
-
-            if getattr(response, 'SAMLResponse', None) is None:
-                self._handle_verification_error('The SAMLResponse attribute is null.')
-
-            # The SAMLResponse is an array and it cannot be empty.
-            if len(getattr(response, 'SAMLResponse')) <= 0:
-                self._handle_verification_error('The SAMLResponse attribute is empty.')
 
             # The relay state is set by the Sp -> Idp -> Sp flow. If the flow is started by the Idp,
             # the relay state is not set. Verify that the unique value passed as relay state during
             # the request step is the same given back here. The referer address should also be
             # restricted to starts with the address of the Sp (or entity id).
-            has_relay_state = hasattr(response, 'RelayState')
+            has_relay_state = hasattr(response, "RelayState")
 
-            if has_relay_state and getattr(response, 'RelayState', None) is None:
-                self._handle_verification_error('The RelayState attribute is null.')
+            if has_relay_state and (
+                not isinstance(response.RelayState, list)
+                or len(response.RelayState) <= 0
+            ):
+                self._handle_verification_error(
+                    "The RelayState attribute should be a list of one or more strings"
+                )
 
-            # The RelayState is an array and it cannot be empty.
-            if has_relay_state and len(getattr(response, 'RelayState')) <= 0:
-                self._handle_verification_error('The RelayState attribute is empty.')
+            relay_state = json.loads(response.RelayState[0]) if has_relay_state else {}
+            LOG.debug("Incoming relay state is [%s]", relay_state)
 
-            relay_state = json.loads(getattr(response, 'RelayState')[0]) if has_relay_state else {}
+            if has_relay_state:
+                if "referer" not in relay_state:
+                    self._handle_verification_error(
+                        "The RelayState is missing the referer"
+                    )
+                elif not relay_state["referer"].startswith(self.entity_id):
+                    self._handle_verification_error(
+                        "The RelayState referer [%s] is not allowed."
+                        " It must come from the trusted SAML entity",
+                        relay_state["referer"],
+                    )
 
-            if (has_relay_state and (
-                    'id' not in relay_state or 'referer' not in relay_state or
-                    self._get_relay_state_id() != relay_state['id'] or
-                    not relay_state['referer'].startswith(self.entity_id))):
-                error_message = 'The value of the RelayState in the response does not match.'
-                self._handle_verification_error(error_message)
+            authn_response = self._get_authn_response_from_response(response)
 
-            # Parse the response and verify signature.
-            saml_response = getattr(response, 'SAMLResponse')[0]
-            saml_client = self._get_saml_client()
-
-            authn_response = saml_client.parse_authn_request_response(
-                saml_response,
-                saml2.BINDING_HTTP_POST
+            LOG.debug(
+                "Validating expected fields are present: %s",
+                self.MANDATORY_SAML_RESPONSE_ATTRIBUTES,
             )
 
-            if not authn_response:
-                self._handle_verification_error('Unable to parse the data in SAMLResponse.')
+            for field in self.MANDATORY_SAML_RESPONSE_ATTRIBUTES:
+                if (
+                    self._get_single_saml_attribute_or_none(authn_response, field)
+                    is None
+                ):
+                    self._handle_verification_error(
+                        'Expected field "%s" to be present '
+                        "in the SAML response! (with no namespace)",
+                        field,
+                    )
 
-            verified_user = {
-                'referer': relay_state.get('referer') or self.entity_id,
-                'username': str(authn_response.ava['Username'][0]),
-                'email': str(authn_response.ava['Email'][0]),
-                'last_name': str(authn_response.ava['LastName'][0]),
-                'first_name': str(authn_response.ava['FirstName'][0])
-            }
+            # Base verified user to be returned
+            verified_user = st2auth_sso.BaseSingleSignOnBackendResponse(
+                username=self._get_single_saml_attribute_or_none(
+                    authn_response, "Username"
+                ),
+                referer=relay_state.get("referer") or self.entity_id,
+            )
+
+            # Role mapping :)
+            sso_roles = self._get_saml_attribute_list_or_empty(authn_response, "Role")
+            if sso_roles:
+                sso_roles.sort()
+                LOG.debug(
+                    "Roles received from SSO [%s] will be sent back as groups",
+                    sso_roles,
+                )
+                verified_user.groups = sso_roles
+
+            return verified_user
+
+        except ValueError:
+            raise
         except Exception:
-            message = 'Error encountered while verifying the SAML2 response.'
+            message = "Error encountered while verifying the SAML2 response."
             LOG.exception(message)
             raise auth_exc.SSOVerificationError(message)
 

@@ -1,0 +1,27 @@
+<md:EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"
+    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+    xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="http://keycloak:8080/realms/stackstorm">
+    <md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <md:KeyDescriptor use="signing">
+            <ds:KeyInfo>
+                <ds:KeyName>ItvZoblEFKfq1reEoL1QJL5qra8rrhMq107KbkflBs4</ds:KeyName>
+                <ds:X509Data>
+                    <ds:X509Certificate>MIICozCCAYsCBgF/vGdbojANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDDApzdGFja3N0b3JtMB4XDTIyMDMyNDE0NDc0NFoXDTMyMDMyNDE0NDkyNFowFTETMBEGA1UEAwwKc3RhY2tzdG9ybTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAO8MYo0xHZjsVXHtn0H7Cow/+VF1SQZd0Yri4LfXlpee+uRb93mOpk8p1Tj1ZDYz38PFZgcAN4Pd5+xcMcPf5FYf7zi6f0hyOfew1EC9VW3BFGz8SpFx0A+LOinQUxoWMZVEMdPUFPUa3hE80Ww/RvUAp05TwbGODku08GxmhspVTIGlnAF0VvbKA1NYnRpfGFxx2xCh9IlIqqmXyu96MU8cgiAgvdNPDOL/3WjqEkAWSfafJWs7/hukbNDl5DsBXRvjW/03oSREE1CW+G4fjOx+os0rUO4sgY7okN7dgurtk8BZQOJI8i3zmmWEm8g//zcrJRvbbmdbNc70E3Zu+BUCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEA0EXirrmgmpL67vfzbKVyoQ9faXfzk/QrGG+ZlIrni/+QmCuR0Qc4weh65P2iv/oCHndMzIwMEPGasfP6VG6yULd1YQzmkIQ6qCxfDmNbhILYLoBa95IxZekqacgZXoLRNiDwyzany46rXRs/mXyYjPwlXynOGy/otUmv6qqp0IhoyBM6R4sTFZ5RryfDXx7F3nu8nfKi7LfJxcPBtrCF4Sg//e6JgHjnQyemA4HAOXPiSXTn2ghKTR/xo5MEVonn296Z3bjYGJuL7mxR+rBdvjW7ZmBGCU6A1g1BlkbjOmlxqFhCSxAtarDSxm3Fd+p1VwylSk+LHg9tnbUL3sBIvg==</ds:X509Certificate>
+                </ds:X509Data>
+            </ds:KeyInfo>
+        </md:KeyDescriptor>
+        <md:ArtifactResolutionService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="http://keycloak:8080/realms/stackstorm/protocol/saml/resolve" index="0"></md:ArtifactResolutionService>
+        <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://keycloak:8080/realms/stackstorm/protocol/saml"></md:SingleLogoutService>
+        <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://keycloak:8080/realms/stackstorm/protocol/saml"></md:SingleLogoutService>
+        <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" Location="http://keycloak:8080/realms/stackstorm/protocol/saml"></md:SingleLogoutService>
+        <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat>
+        <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+        <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified</md:NameIDFormat>
+        <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://keycloak:8080/realms/stackstorm/protocol/saml"></md:SingleSignOnService>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://keycloak:8080/realms/stackstorm/protocol/saml"></md:SingleSignOnService>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="http://keycloak:8080/realms/stackstorm/protocol/saml"></md:SingleSignOnService>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact" Location="http://keycloak:8080/realms/stackstorm/protocol/saml"></md:SingleSignOnService>
+    </md:IDPSSODescriptor>
+</md:EntityDescriptor>
