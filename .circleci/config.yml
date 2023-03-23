@@ -8,40 +8,11 @@ defaults: &defaults
 
 version: 2
 jobs:
-  build_and_test_python27:
-    docker:
-      - image: circleci/python:2.7
-      - image: rabbitmq:3
-      - image: mongo:3.4
-
-    steps:
-      - checkout
-      - run:
-          name: Clone StackStorm/st2 repo
-          command: |
-            make .clone_st2_repo
-      - restore_cache:
-          key: v1-dependency-cache-py27-{{ checksum "/tmp/st2/requirements.txt" }}
-      - run:
-          name: Download and install dependencies
-          command: |
-            sudo apt-get -y install xmlsec1
-            make requirements
-      - run:
-          name: Run lint and tests (Python 2.7)
-          command: |
-            make .lint
-            make .unit-tests
-      - save_cache:
-          key: v1-dependency-cache-py27-{{ checksum "/tmp/st2/requirements.txt" }}
-          paths:
-            - ~/.cache/pip
-            - ~/.apt-cache
   build_and_test_python36:
     docker:
       - image: circleci/python:3.6
       - image: rabbitmq:3
-      - image: mongo:3.4
+      - image: mongo:4.0
 
     steps:
       - checkout
@@ -54,7 +25,8 @@ jobs:
       - run:
           name: Download and install dependencies
           command: |
-            sudo apt-get -y install xmlsec1
+            sudo apt-get update && sudo apt-get -y install xmlsec1 libldap2-dev  \
+              libsasl2-dev slapd ldap-utils tox lcov valgrind
             make requirements
       - run:
           name: Run lint and tests (Python 3.6)
@@ -66,135 +38,15 @@ jobs:
           paths:
             - ~/.cache/pip
             - ~/.apt-cache
-  build_packages:
-    <<: *defaults
-    docker:
-      - image: circleci/python:2.7
-    environment:
-      DISTROS: xenial bionic el7 el8
-      DOCKER_DISTROS: xenial bionic centos7 centos8
-      DOCKER_RUN: |-
-        docker run -w /code/st2-auth-backend-sso-saml2 --volumes-from st2-auth-backend-sso-saml2-vol
-            -e PKG_VERSION=$PKG_VERSION
-            -e PKG_RELEASE=$PKG_RELEASE
-    steps:
-      - checkout
-      - run:
-          name: Install dependencies
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y jq rpm
-      - setup_remote_docker
-      - run:
-          name: Pull buildpacks
-          command: |
-            for dist in $DOCKER_DISTROS; do
-              docker pull stackstorm/buildpack:$dist
-            done
-            echo "<-- BEGIN DOCKER IMAGE LIST -->"
-            docker image list
-            echo "<-- END DOCKER IMAGE LIST -->"
-      - run:
-          name: Setup ~/.circlerc environment variables
-          command: |
-            set -e
-            mkdir .circle
-            wget -qO - https://github.com/StackStorm/st2-packages/raw/master/.circle/packagecloud.sh > .circle/packagecloud.sh
-            chmod 755 .circle/packagecloud.sh
-            PKG_VERSION=$(python setup.py --version 2> /dev/null | sed 's/\.dev[0-9]$/dev/')
-            PKG_RELEASE=$(.circle/packagecloud.sh next-revision xenial ${PKG_VERSION} st2-auth-backend-sso-saml2)
-            echo "export PKG_VERSION=${PKG_VERSION}" >> ~/.circlerc
-            echo "export PKG_RELEASE=${PKG_RELEASE}" >> ~/.circlerc
-            # Create directories
-            mkdir -p ~/st2-auth-backend-sso-saml2/build/
-            cd  ~/st2-auth-backend-sso-saml2/build/ && mkdir ${DISTROS}
-      - run:
-          # Workaround for CircleCI docker-compose limitation where volumes don't work
-          # See detailed explanation: https://circleci.com/docs/2.0/building-docker-images/#mounting-folders
-          name: Copy packages files to build containers
-          command: |
-            # creating dummy container which will hold a volume with data files
-            docker create -v /code --name st2-auth-backend-sso-saml2-vol alpine:3.4 /bin/true
-            # copy st2-packages data files into this volume
-            docker cp ~/st2-auth-backend-sso-saml2 st2-auth-backend-sso-saml2-vol:/code
-      - run:
-          name: Build packages for supported distros on native OS inside stackstorm/buildpack container
-          command: |
-            source ~/.circlerc
-            # 1. Build Xenial packages
-            # NOTE: We can re-use the same packages because both distros use same Python 2.7 version
-            eval ${DOCKER_RUN} stackstorm/buildpack:xenial make play deb
-            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.deb ~/st2-auth-backend-sso-saml2/build/xenial
-            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.changes ~/st2-auth-backend-sso-saml2/build/xenial
-            # 2. Build Bionic packages
-            eval ${DOCKER_RUN} stackstorm/buildpack:bionic make play deb
-            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.deb ~/st2-auth-backend-sso-saml2/build/bionic
-            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2_${PKG_VERSION}-${PKG_RELEASE}_amd64.changes ~/st2-auth-backend-sso-saml2/build/bionic
-            # 3. Build RHEL 7 packages
-            eval ${DOCKER_RUN} stackstorm/buildpack:centos7 make play rpm
-            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2/build/x86_64/st2-auth-backend-sso-saml2-${PKG_VERSION}-${PKG_RELEASE}.x86_64.rpm ~/st2-auth-backend-sso-saml2/build/el7
-            # 4. Build RHEL 8 packages
-            eval ${DOCKER_RUN} stackstorm/buildpack:centos8 make play rpm
-            docker cp st2-auth-backend-sso-saml2-vol:/code/st2-auth-backend-sso-saml2/build/x86_64/st2-auth-backend-sso-saml2-${PKG_VERSION}-${PKG_RELEASE}.x86_64.rpm ~/st2-auth-backend-sso-saml2/build/el8
-            # List poduced artifacts
-            ls -la ~/st2-auth-backend-sso-saml2/build/*/*
-      - store_artifacts:
-          path: ~/st2-auth-backend-sso-saml2/build
-          destination: packages
-      - persist_to_workspace:
-          root: ~/st2-auth-backend-sso-saml2
-          paths:
-            - .circle/packagecloud.sh
-            - build
-  deploy_packages:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.4
-    working_directory: /tmp/deploy
-    environment:
-      DISTROS: xenial bionic el7 el8
-    steps:
-      - checkout
-      - attach_workspace:
-          at: .
-      - run:
-          name: List workspace files
-          command: find . | sed 's|[^/]*/|  |g'
-      - run:
-          name: Install dependencies
-          command: |
-            set -x
-            sudo apt-get -y install jq
-            gem install package_cloud
-      - run:
-          name: Deploy to packagecloud
-          command: |
-            for distro in ${DISTROS}; do
-              .circle/packagecloud.sh deploy ${distro} build/${distro}
-            done
 workflows:
   version: 2
   # Workflow which runs on each push
   build_test_deploy_on_push:
     jobs:
-      - build_and_test_python27
       - build_and_test_python36
-      - build_packages
-      - deploy_packages:
-          requires:
-            - build_and_test_python27
-            - build_and_test_python36
-            - build_packages
-          filters:
-            branches:
-              only:
-                - master
-                - /v[0-9]+\.[0-9]+/
-                - feature/circleci
   build_test_nightly:
     jobs:
-        - build_and_test_python27
-        - build_and_test_python36
+      - build_and_test_python36
     triggers:
       # Run nightly build for the pack
       - schedule:
